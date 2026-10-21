@@ -1,0 +1,19 @@
+# Konfigurasi lokal dan rahasia
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Dependensi frontend
+node_modules/
+
+# File sementara
+*.log
+.DS_Store
+Thumbs.db
