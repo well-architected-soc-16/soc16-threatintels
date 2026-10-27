@@ -22,3 +22,4 @@ logs/
 
 # Rahasia lokal (password DB, dll.)
 secrets/
+.ruff_cache/
