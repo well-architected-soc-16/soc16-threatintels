@@ -21,7 +21,9 @@ class HealthResponse(BaseModel):
 @router.get(
     "/health",
     response_model=HealthResponse,
-    responses={503: {"model": HealthResponse, "description": "Database tidak dapat dijangkau"}},
+    responses={
+        503: {"model": HealthResponse, "description": "Database tidak dapat dijangkau"}
+    },
 )
 def health() -> HealthResponse | JSONResponse:
     db_ok = check_db()

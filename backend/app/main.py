@@ -12,4 +12,6 @@ setup_logging(settings.log_level)
 app = FastAPI(title="SOC16 Threat Intel Aggregator", version="0.1.0")
 app.include_router(health.router, prefix="/api/v1")
 
-logging.getLogger(__name__).info("aplikasi dimulai env=%s misp_mode=%s", settings.app_env, settings.misp_mode)
+logging.getLogger(__name__).info(
+    "aplikasi dimulai env=%s misp_mode=%s", settings.app_env, settings.misp_mode
+)
