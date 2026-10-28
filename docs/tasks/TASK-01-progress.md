@@ -1,0 +1,60 @@
+# TASK-01 — Progress
+
+Diperbarui: 2026-10-29. Rujukan: [`TASK-01-fondasi-backend.md`](TASK-01-fondasi-backend.md), issue #10.
+
+## Status per tahap
+
+| Tahap | Isi | PR | Status |
+|---|---|---|---|
+| 0 | Kerangka proyek, Docker Compose (API + Postgres) | #11 | Selesai, ter-merge |
+| 1 | Database, migrasi Alembic, seed user | #12 | Selesai, ter-merge |
+| 2 | Login JWT, RBAC, manajemen user admin, audit log | #13 | Selesai, ter-merge |
+| 3 | Validasi IP dan endpoint `/checks` (tanpa sumber eksternal) | #14 | Selesai, ter-merge |
+| 4 | Kesiapan MISP (mode mock), `/iocs/misp` anti-duplikat | #15 | Selesai, **PR masih terbuka** |
+| 5 | Rapikan: README, daftar endpoint, cara seed user | - | Belum dikerjakan |
+
+Hasil terakhir: `pytest` **155 passed**, `ruff check` dan `ruff format --check` bersih.
+
+## Keputusan Tahap 4
+
+1. **Retry submission `failed` dipertahankan.** Submission `failed` boleh dikirim ulang memakai baris yang sama (respons 200, tidak ada baris baru); status lain tetap 409.
+   - Transisi `failed` -> `pending` adalah satu `UPDATE ... WHERE status = 'failed'`. Di antara request yang bersamaan hanya satu yang mendapat `rowcount = 1`; sisanya menerima 409.
+   - Setiap retry yang lolos tercatat di audit log (`ioc_submit_retry`, dalam transaksi yang sama dengan klaim); hasilnya tercatat sebagai `ioc_submit` dengan `detail.retry = true`. Retry yang kalah klaim tercatat sebagai `ioc_submit_duplicate`, bukan retry.
+   - Diuji: 10 request retry paralel menghasilkan tepat 1x200 dan 9x409, klien MISP dipanggil sekali, 1 baris, 1 audit `ioc_submit_retry`. Uji mutasi (menghapus `WHERE status = 'failed'`) membuat test ini gagal.
+2. **Pending yang nyangkut dan idempotensi event MISP: dicatat sebagai known gaps, sengaja belum diimplementasi** (lihat bagian di bawah).
+3. **`MISP_MODE=live` yang belum diimplementasi sekarang menjawab 501**, bukan 502. Submission tetap tersimpan `failed` agar tidak pernah tampak sukses. 502 dipakai untuk kegagalan klien MISP yang sebenarnya.
+4. **Roundtrip migrasi berjalan di database test, bukan DB dev.**
+   - `tests/test_migrations.py` menjalankan `upgrade head`, `alembic check` (tanpa drift), `downgrade -1` satu revisi demi satu revisi sampai kosong, lalu `upgrade head` lagi.
+   - Fixture `migration_engine` memakai database terpisah **`<DB_NAME>_migration_test`** (bukan `<DB_NAME>_test`, supaya roundtrip yang menjatuhkan tabel tidak merusak skema yang dipakai test lain). Skemanya dikosongkan sebelum tiap test.
+   - Pengaman `_assert_test_db`: nama database wajib berakhiran `_test` dan tidak boleh sama dengan DB dev; dipakai juga oleh fixture `db`.
+   - `alembic/env.py` menerima koneksi yang disuntikkan lewat `config.attributes["connection"]`, sehingga test tidak pernah memakai engine dev.
+   - Setelah perubahan ini, tidak ada lagi alasan menjalankan `alembic downgrade` pada DB dev untuk memverifikasi migrasi.
+5. **Check berstatus `INPUT_DITOLAK` tidak bisa dikirim ke MISP**, dan ada test-nya:
+   - `test_check_input_ditolak_tidak_boleh_dikirim_422`: respons 422, tidak ada baris `ioc_submissions` (bahkan bukan `pending`), klien MISP tidak dipanggil, tidak ada audit `ioc_submit`. Uji mutasi (guard dihapus) membuat test ini gagal.
+   - `test_input_ditolak_dari_api_tidak_pernah_menjadi_check_yang_bisa_dikirim`: lewat jalur nyata, `POST /checks` yang ditolak tidak menyimpan check apa pun, sehingga tidak ada `check_id` yang bisa dikirim (404).
+
+## Definition of Done TASK-01
+
+- [x] `docker compose up -d --build` menyalakan db + api tanpa error (diverifikasi di tiap tahap; migrasi berjalan otomatis lewat entrypoint)
+- [x] Login 4 user berhasil, RBAC + uji 403 punya test (Tahap 2; juga dicoba manual dengan 4 user seed)
+- [x] Validasi IP sesuai aturan, input ditolak tanpa request keluar (Tahap 3; terbukti dengan spy adapter + blokir socket + uji mutasi)
+- [x] `ioc_submissions` + endpoint MISP mock siap, anti-duplikat (Tahap 4; **menunggu PR #15 di-merge**)
+- [x] Tidak ada rahasia di riwayat git (dipindai 2026-10-29: 19 commit di semua ref; nilai `SEED_*`, `JWT_SECRET_KEY`, dan `db_password` tidak ditemukan; `.env` dan `secrets/` tidak pernah ter-track)
+
+Belum: Tahap 5 (README "Menjalankan secara lokal", daftar endpoint, cara seed user). `Refs #10` diganti `Closes #10` di PR terakhir TASK-01.
+
+## Known gaps
+
+Belum diimplementasi dan **tidak dikerjakan di TASK-01**. Perlu diputuskan sebelum `MISP_MODE=live` diisi; dengan mock keduanya praktis tidak terjadi.
+
+1. **Submission `pending` yang nyangkut.** Submission di-commit sebagai `pending` sebelum klien MISP dipanggil. Jika proses mati di antara dua titik itu, baris tertinggal `pending` selamanya. Check tersebut lalu selalu dijawab 409 dan tidak bisa di-retry (retry hanya untuk `failed`). Belum ada batas waktu, pembersih, maupun aksi admin untuk membereskannya; pemulihan saat ini manual di database. Arah solusi: batas waktu `pending` yang kedaluwarsa menjadi `failed` (sehingga bisa di-retry), atau aksi admin.
+2. **Idempotensi event MISP.** UUID event belum dibuat saat submission `pending` dan belum dipakai ulang saat retry. Dengan klien live, retry setelah timeout (MISP sebenarnya sudah membuat event, tetapi balasannya tidak sampai) dapat membuat event ganda di MISP. Arah solusi: buat UUID saat klaim, simpan di baris submission, kirim bersama permintaan, dan pakai ulang saat retry. Perilaku MISP terhadap UUID yang ditentukan klien perlu dicek ke dokumentasi MISP/PyMISP sebelum diimplementasi.
+
+Temuan lain selama pengerjaan (juga belum ditangani):
+
+3. **Retry menimpa `reason`, `tags`, dan `submitted_by`** pada baris yang sama. Nilai lama hilang, dan audit log sengaja tidak menyimpan teks alasan, jadi alasan percobaan pertama tidak terlacak.
+4. **`coverage` untuk `NO_RECORD` dan `INSUFFICIENT_DATA` belum ditetapkan.** `assess()` hanya menghitung `OK_SIGNAL` dan `OK_NO_SIGNAL` sebagai "bisa dinilai". Perlu keputusan saat adapter AbuseIPDB/VirusTotal dibuat.
+5. **Audit login gagal menyimpan username yang dicoba** (di `detail`, dipotong 64 karakter). Jika seseorang salah mengetik password di kolom username, nilai itu ikut tersimpan.
+6. **Belum ada pembatasan percobaan login** (rate limit atau lockout).
+7. **Alamat IP klien di audit diambil dari koneksi langsung.** Di belakang reverse proxy nilainya akan berupa IP proxy; perlu penanganan `X-Forwarded-For` yang tepercaya saat deploy.
+8. **`MISP_MODE=live`** masih kerangka (`LiveMispClient` melempar `NotImplementedError`); verifikasi TLS dengan file CA dan penyimpanan API key MISP belum dirancang.
