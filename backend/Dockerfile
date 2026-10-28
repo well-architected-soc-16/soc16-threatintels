@@ -13,16 +13,22 @@ FROM base AS runtime
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY app ./app
+COPY alembic.ini ./
+COPY alembic ./alembic
+COPY scripts ./scripts
 USER app
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "scripts/entrypoint.sh"]
 
 # Target dev: runtime + dependensi dev + tests (dipakai docker-compose).
 FROM base AS dev
 COPY requirements.txt requirements-dev.txt ./
 RUN pip install -r requirements-dev.txt
 COPY app ./app
+COPY alembic.ini ./
+COPY alembic ./alembic
+COPY scripts ./scripts
 COPY tests ./tests
 USER app
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "scripts/entrypoint.sh"]
