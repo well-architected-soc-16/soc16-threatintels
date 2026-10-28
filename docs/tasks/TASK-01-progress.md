@@ -10,10 +10,17 @@ Diperbarui: 2026-10-29. Rujukan: [`TASK-01-fondasi-backend.md`](TASK-01-fondasi-
 | 1 | Database, migrasi Alembic, seed user | #12 | Selesai, ter-merge |
 | 2 | Login JWT, RBAC, manajemen user admin, audit log | #13 | Selesai, ter-merge |
 | 3 | Validasi IP dan endpoint `/checks` (tanpa sumber eksternal) | #14 | Selesai, ter-merge |
-| 4 | Kesiapan MISP (mode mock), `/iocs/misp` anti-duplikat | #15 | Selesai, **PR masih terbuka** |
-| 5 | Rapikan: README, daftar endpoint, cara seed user | - | Belum dikerjakan |
+| 4 | Kesiapan MISP (mode mock), `/iocs/misp` anti-duplikat | #15 | Selesai, ter-merge |
+| 5 | Rapikan: `ruff` bersih, README (menjalankan lokal, daftar endpoint, seed user) | #16 | Selesai; PR ini menutup issue #10 |
 
 Hasil terakhir: `pytest` **155 passed**, `ruff check` dan `ruff format --check` bersih.
+
+## Tahap 5
+
+- `ruff check` dan `ruff format --check` bersih pada seluruh `backend/`.
+- README diperbarui: status dan tabel teknologi disesuaikan dengan kondisi sebenarnya, ditambah panduan menjalankan secara lokal (fish), seed user, contoh pemakaian API, daftar endpoint beserta respons gagalnya, tabel hak akses, tabel konfigurasi, cara menjalankan test dan lint, dan struktur backend. Kata "privat" untuk repository dikoreksi (repository ini public). `.env.example` diperjelas bahwa nilai contoh wajib diganti.
+- **Panduan diuji dari awal**: repo di-clone ke folder baru tanpa `.env` dan `secrets/`, lalu blok perintah fish diekstrak langsung dari README dan dijalankan (project Compose terpisah). Hasilnya: konfigurasi dan secret terisi, `docker compose up -d --build` menyalakan `db` dan `api` dengan migrasi 0001-0003 otomatis, seed `dibuat` lalu `sudah ada` saat diulang, `/health` OK, login lewat `jq` + `/auth/me` + `POST /checks` sesuai deskripsi, viewer mendapat 403, IP privat mendapat 422, dan `pytest` **155 passed** dengan `ruff` bersih.
+- Checklist "Tahapan Pengembangan" di README sengaja tidak diubah; itu checklist proyek tim dan diperbarui setelah hasil pekerjaan diperiksa tim.
 
 ## Keputusan Tahap 4
 
@@ -38,10 +45,10 @@ Hasil terakhir: `pytest` **155 passed**, `ruff check` dan `ruff format --check` 
 - [x] `docker compose up -d --build` menyalakan db + api tanpa error (diverifikasi di tiap tahap; migrasi berjalan otomatis lewat entrypoint)
 - [x] Login 4 user berhasil, RBAC + uji 403 punya test (Tahap 2; juga dicoba manual dengan 4 user seed)
 - [x] Validasi IP sesuai aturan, input ditolak tanpa request keluar (Tahap 3; terbukti dengan spy adapter + blokir socket + uji mutasi)
-- [x] `ioc_submissions` + endpoint MISP mock siap, anti-duplikat (Tahap 4; **menunggu PR #15 di-merge**)
+- [x] `ioc_submissions` + endpoint MISP mock siap, anti-duplikat (Tahap 4, PR #15)
 - [x] Tidak ada rahasia di riwayat git (dipindai 2026-10-29: 19 commit di semua ref; nilai `SEED_*`, `JWT_SECRET_KEY`, dan `db_password` tidak ditemukan; `.env` dan `secrets/` tidak pernah ter-track)
 
-Belum: Tahap 5 (README "Menjalankan secara lokal", daftar endpoint, cara seed user). `Refs #10` diganti `Closes #10` di PR terakhir TASK-01.
+Seluruh Definition of Done terpenuhi. Yang **tidak** termasuk TASK-01 dan masih terbuka: frontend, adapter AbuseIPDB/VirusTotal, scoring, CI/CD, dan deploy ke `soc-ir` (lihat juga Known gaps).
 
 ## Known gaps
 
@@ -57,4 +64,5 @@ Temuan lain selama pengerjaan (juga belum ditangani):
 5. **Audit login gagal menyimpan username yang dicoba** (di `detail`, dipotong 64 karakter). Jika seseorang salah mengetik password di kolom username, nilai itu ikut tersimpan.
 6. **Belum ada pembatasan percobaan login** (rate limit atau lockout).
 7. **Alamat IP klien di audit diambil dari koneksi langsung.** Di belakang reverse proxy nilainya akan berupa IP proxy; perlu penanganan `X-Forwarded-For` yang tepercaya saat deploy.
-8. **`MISP_MODE=live`** masih kerangka (`LiveMispClient` melempar `NotImplementedError`); verifikasi TLS dengan file CA dan penyimpanan API key MISP belum dirancang.
+8. **Nilai contoh di `.env.example` lolos validasi.** `JWT_SECRET_KEY=ganti-dengan-...` dan semua `SEED_*_PASSWORD=ganti-saya-min-12-karakter` memenuhi batas panjang (JWT tidak divalidasi panjangnya sama sekali), sehingga aplikasi dan seed menerimanya. Jika seseorang lupa menggantinya, akun dan penanda tangan JWT memakai nilai yang diketahui publik (repository ini public). Saat ini hanya diperingatkan di README dan `.env.example`. Arah solusi: tolak nilai placeholder dan wajibkan panjang minimal `JWT_SECRET_KEY` saat start, serta tolak password seed yang sama dengan contoh.
+9. **`MISP_MODE=live`** masih kerangka (`LiveMispClient` melempar `NotImplementedError`); verifikasi TLS dengan file CA dan penyimpanan API key MISP belum dirancang.
