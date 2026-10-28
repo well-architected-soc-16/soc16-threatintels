@@ -19,3 +19,7 @@ Thumbs.db
 
 # Log runtime lokal
 logs/
+
+# Rahasia lokal (password DB, dll.)
+secrets/
+.ruff_cache/
