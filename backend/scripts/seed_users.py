@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import select
 
+from app.core.secret_policy import PLACEHOLDER_PREFIX, is_placeholder
 from app.core.security import hash_password
 from app.db.session import get_sessionmaker
 from app.models import Role, User
@@ -62,6 +63,12 @@ def load_seed_users(env: Mapping[str, str]) -> list[SeedUser]:
             errors.append(f"{user_var} kosong atau belum diset")
         if not password:
             errors.append(f"{password_var} kosong atau belum diset")
+        elif is_placeholder(password):
+            # Nilai contoh di .env.example diketahui publik (repo public).
+            errors.append(
+                f"{password_var} masih berisi nilai contoh "
+                f"(berawalan '{PLACEHOLDER_PREFIX}'); ganti dengan password sendiri"
+            )
         elif len(password) < MIN_PASSWORD_LENGTH:
             errors.append(f"{password_var} kurang dari {MIN_PASSWORD_LENGTH} karakter")
         if username and password:
