@@ -51,7 +51,8 @@ def engine() -> Iterator[Engine]:
 def db(engine: Engine) -> Iterator[Session]:
     assert engine.url.database == _test_db_name()
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE users, audit_logs RESTART IDENTITY CASCADE"))
+        tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
+        conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     with sessionmaker(bind=engine, expire_on_commit=False)() as session:
         yield session
 
