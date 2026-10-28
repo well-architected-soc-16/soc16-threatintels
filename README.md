@@ -98,7 +98,7 @@ for v in SEED_ADMIN_PASSWORD SEED_ANALYST_MISP_PASSWORD SEED_ANALYST_PASSWORD SE
 end
 ```
 
-Nilai contoh di `.env.example` (`ganti-...`) **harus diganti**: panjangnya sudah memenuhi syarat sehingga aplikasi tidak akan menolaknya, tetapi nilainya diketahui semua orang. Password akun awal dapat dilihat di `.env` (baris `SEED_*_PASSWORD`); simpan di tempat yang aman atau ganti dengan password pilihan sendiri (minimal 12 karakter). Variabel lain dijelaskan di [Konfigurasi](#konfigurasi).
+Nilai contoh di `.env.example` (`ganti-...`) **harus diganti**, karena nilainya diketahui semua orang (repository ini public). Aplikasi menolak start jika `JWT_SECRET_KEY` berawalan `ganti-` (tanpa membedakan huruf besar/kecil) atau kurang dari 32 byte, dan seed menolak password yang berawalan `ganti-`; pesan error hanya menyebut nama variabelnya, bukan nilainya. Akibatnya, menyalin `.env.example` tanpa mengisinya membuat kontainer `api` berhenti saat start. Password akun awal dapat dilihat di `.env` (baris `SEED_*_PASSWORD`); simpan di tempat yang aman atau ganti dengan password pilihan sendiri (minimal 12 karakter). Variabel lain dijelaskan di [Konfigurasi](#konfigurasi).
 
 **2. Buat password database.** Password Postgres dibaca dari file (Docker secret), bukan dari variabel lingkungan:
 
@@ -216,10 +216,10 @@ Dibaca dari `.env` (lihat `.env.example`). Password database tidak ada di sini: 
 | `LOG_LEVEL` | `INFO` | Level log (format JSON ke stdout) |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | `db`, `5432`, `soc16ti`, `soc16ti` | Koneksi Postgres di jaringan Compose |
 | `DB_PASSWORD_FILE` | `/run/secrets/db_password` | Lokasi file password di dalam kontainer; jangan diubah untuk Compose |
-| `JWT_SECRET_KEY` | (wajib diisi) | Kunci penanda tangan JWT; acak, minimal 32 karakter |
+| `JWT_SECRET_KEY` | (wajib diisi) | Kunci penanda tangan JWT; acak, minimal 32 **byte**, tidak boleh berawalan `ganti-`. Aplikasi menolak start jika tidak terpenuhi |
 | `JWT_EXPIRE_MINUTES` | `30` | Masa berlaku token |
 | `MISP_MODE` | `mock` | `mock` tidak menghubungi apa pun; `live` belum diimplementasikan dan menjawab 501 |
-| `SEED_*_USER`, `SEED_*_PASSWORD` | lihat `.env.example` | Akun awal untuk `scripts.seed_users`; password minimal 12 karakter |
+| `SEED_*_USER`, `SEED_*_PASSWORD` | lihat `.env.example` | Akun awal untuk `scripts.seed_users`; password minimal 12 karakter dan tidak boleh berawalan `ganti-` |
 
 ### Menjalankan test dan lint
 

@@ -64,5 +64,28 @@ Temuan lain selama pengerjaan (juga belum ditangani):
 5. **Audit login gagal menyimpan username yang dicoba** (di `detail`, dipotong 64 karakter). Jika seseorang salah mengetik password di kolom username, nilai itu ikut tersimpan.
 6. **Belum ada pembatasan percobaan login** (rate limit atau lockout).
 7. **Alamat IP klien di audit diambil dari koneksi langsung.** Di belakang reverse proxy nilainya akan berupa IP proxy; perlu penanganan `X-Forwarded-For` yang tepercaya saat deploy.
-8. **Nilai contoh di `.env.example` lolos validasi.** `JWT_SECRET_KEY=ganti-dengan-...` dan semua `SEED_*_PASSWORD=ganti-saya-min-12-karakter` memenuhi batas panjang (JWT tidak divalidasi panjangnya sama sekali), sehingga aplikasi dan seed menerimanya. Jika seseorang lupa menggantinya, akun dan penanda tangan JWT memakai nilai yang diketahui publik (repository ini public). Saat ini hanya diperingatkan di README dan `.env.example`. Arah solusi: tolak nilai placeholder dan wajibkan panjang minimal `JWT_SECRET_KEY` saat start, serta tolak password seed yang sama dengan contoh.
+8. ~~**Nilai contoh di `.env.example` lolos validasi.**~~ **Diselesaikan di issue #17** (lihat bagian di bawah). Sisa yang masih terbuka: test pembanding dengan isi `.env.example` belum ada karena file itu tidak terjangkau dari container.
 9. **`MISP_MODE=live`** masih kerangka (`LiveMispClient` melempar `NotImplementedError`); verifikasi TLS dengan file CA dan penyimpanan API key MISP belum dirancang.
+
+## Issue #17: tolak secret placeholder
+
+Menutup known gap nomor 8. Branch `fix/tolak-secret-placeholder`.
+
+- **Aturan** (`app/core/secret_policy.py`, dipakai bersama oleh konfigurasi dan seed): nilai dianggap placeholder jika berawalan `ganti-` (tanpa membedakan huruf besar/kecil, spasi di tepi diabaikan). Deteksi memakai pola ini; `.env.example` **tidak** dibaca saat runtime.
+- **Aplikasi**: `Settings` menolak `JWT_SECRET_KEY` yang placeholder atau kurang dari 32 **byte** (dihitung dari UTF-8, bukan jumlah karakter). Karena `Settings` dimuat saat `import app.main` dan oleh `alembic/env.py`, kontainer berhenti di langkah migrasi pertama entrypoint sebelum uvicorn start.
+- **Seed**: `scripts.seed_users` membatalkan seluruh seed jika ada `SEED_*_PASSWORD` yang placeholder; pesan hanya menyebut nama variabel.
+- **Nilai tidak bocor**: `hide_input_in_errors=True` pada `Settings`, ditambah pesan validator yang hanya menyebut nama variabel dan alasan. Diuji pada teks error (`str`, `repr`, traceback) dan pada keluaran proses nyata (stdout + stderr) untuk `import app.main` dan `alembic current`.
+- **Diuji**: `tests/test_secret_policy.py` dan tambahan di `tests/test_seed_users.py`. Dibuktikan juga manual: kontainer dengan `--env-file .env.example` apa adanya keluar dengan kode 1 dan pesan jelas tanpa nilai; dengan secret acak (stack dev) start normal.
+
+**Belum ada: test pembanding dengan isi `.env.example`.** Tujuannya mencegah `.env.example` diedit menjadi nilai yang lolos validasi. Test itu tidak dapat berjalan di container sekarang karena `.env.example` berada di luar build context `./backend` dan tidak di-mount, jadi tidak ditambahkan agar tidak di-skip. Menunggu keputusan sebelum compose diubah. Opsi:
+
+  - **A. Bind mount read-only di service `api` (hanya dev):** `./.env.example:/app/.env.example:ro` di `docker-compose.yml`. Satu baris, image `runtime` tidak berubah, file tetap satu sumber. Test dibuat **gagal keras** (bukan skip) jika file tidak ada. Konsekuensi: test hanya jalan lewat Compose; di CI harus memakai mount yang sama atau menjalankan test dari root repo.
+  - **B. Salin ke build context** (mis. `backend/tests/fixtures/`): bekerja tanpa mount, tetapi menduplikasi file sehingga bisa melenceng dari `.env.example` yang asli, padahal itulah yang hendak dijaga.
+  - **C. Ubah build context ke root repo:** `.env.example` ikut ter-COPY, tetapi mengubah Dockerfile dan `.dockerignore`, dan berisiko menyalin file lain ke image.
+  - **D. Jalankan test itu di host/CI di luar container:** tidak perlu mengubah compose, tetapi butuh Python dan dependensi di host.
+  - Rekomendasi: **A**.
+
+## Catatan untuk CI/CD
+
+- **CI harus membuat secret acak saat job berjalan**, misalnya `openssl rand -hex 32` untuk `JWT_SECRET_KEY` dan `openssl rand -hex 16` untuk tiap `SEED_*_PASSWORD`. Jangan menjalankan test atau aplikasi dengan `.env.example` apa adanya: setelah issue #17 itu **gagal start dengan sengaja**. Jangan juga meng-commit nilai tetap ke workflow (repository ini public); gunakan nilai yang dibuat per-run atau GitHub Actions secrets.
+- Test sudah membuat database sendiri (`<DB_NAME>_test`, `<DB_NAME>_migration_test`) dan hanya membutuhkan `JWT_SECRET_KEY` valid, variabel `DB_*`, dan `DB_PASSWORD_FILE` yang menunjuk file berisi password Postgres.
