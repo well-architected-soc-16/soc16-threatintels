@@ -28,6 +28,12 @@ services:
       DB_PASSWORD_FILE: /run/secrets/db_password
     secrets:
       - db_password
+    volumes:
+      # KHUSUS DEV/TEST: dibaca tests/test_env_example.py. Jangan disalin ke compose
+      # produksi (soc-ir): di sana tidak ada alasan membawa .env.example ke kontainer.
+      # Mount satu file menyimpan inode-nya: setelah .env.example diubah (edit, git pull),
+      # jalankan `docker compose up -d --force-recreate api` agar kontainer melihat isi baru.
+      - ./.env.example:/app/.env.example:ro
     depends_on:
       db:
         condition: service_healthy
