@@ -64,7 +64,7 @@ Temuan lain selama pengerjaan (juga belum ditangani):
 5. **Audit login gagal menyimpan username yang dicoba** (di `detail`, dipotong 64 karakter). Jika seseorang salah mengetik password di kolom username, nilai itu ikut tersimpan.
 6. **Belum ada pembatasan percobaan login** (rate limit atau lockout).
 7. **Alamat IP klien di audit diambil dari koneksi langsung.** Di belakang reverse proxy nilainya akan berupa IP proxy; perlu penanganan `X-Forwarded-For` yang tepercaya saat deploy.
-8. ~~**Nilai contoh di `.env.example` lolos validasi.**~~ **Diselesaikan di issue #17** (lihat bagian di bawah). Sisa yang masih terbuka: test pembanding dengan isi `.env.example` belum ada karena file itu tidak terjangkau dari container.
+8. ~~**Nilai contoh di `.env.example` lolos validasi.**~~ **Diselesaikan di issue #17** (lihat bagian di bawah).
 9. **`MISP_MODE=live`** masih kerangka (`LiveMispClient` melempar `NotImplementedError`); verifikasi TLS dengan file CA dan penyimpanan API key MISP belum dirancang.
 
 ## Issue #17: tolak secret placeholder
@@ -77,13 +77,13 @@ Menutup known gap nomor 8. Branch `fix/tolak-secret-placeholder`.
 - **Nilai tidak bocor**: `hide_input_in_errors=True` pada `Settings`, ditambah pesan validator yang hanya menyebut nama variabel dan alasan. Diuji pada teks error (`str`, `repr`, traceback) dan pada keluaran proses nyata (stdout + stderr) untuk `import app.main` dan `alembic current`.
 - **Diuji**: `tests/test_secret_policy.py` dan tambahan di `tests/test_seed_users.py`. Dibuktikan juga manual: kontainer dengan `--env-file .env.example` apa adanya keluar dengan kode 1 dan pesan jelas tanpa nilai; dengan secret acak (stack dev) start normal.
 
-**Belum ada: test pembanding dengan isi `.env.example`.** Tujuannya mencegah `.env.example` diedit menjadi nilai yang lolos validasi. Test itu tidak dapat berjalan di container sekarang karena `.env.example` berada di luar build context `./backend` dan tidak di-mount, jadi tidak ditambahkan agar tidak di-skip. Menunggu keputusan sebelum compose diubah. Opsi:
+**Test pembanding dengan isi `.env.example`** (`tests/test_env_example.py`) adalah satu-satunya tempat file itu dibaca. Tujuannya mencegah `.env.example` diedit diam-diam menjadi nilai yang lolos validasi: JWT contoh ditolak `Settings`, keempat password seed contoh ditolak, start dengan `.env.example` apa adanya gagal tanpa membocorkan nilai, dan start dengan JWT acak valid normal.
 
-  - **A. Bind mount read-only di service `api` (hanya dev):** `./.env.example:/app/.env.example:ro` di `docker-compose.yml`. Satu baris, image `runtime` tidak berubah, file tetap satu sumber. Test dibuat **gagal keras** (bukan skip) jika file tidak ada. Konsekuensi: test hanya jalan lewat Compose; di CI harus memakai mount yang sama atau menjalankan test dari root repo.
-  - **B. Salin ke build context** (mis. `backend/tests/fixtures/`): bekerja tanpa mount, tetapi menduplikasi file sehingga bisa melenceng dari `.env.example` yang asli, padahal itulah yang hendak dijaga.
-  - **C. Ubah build context ke root repo:** `.env.example` ikut ter-COPY, tetapi mengubah Dockerfile dan `.dockerignore`, dan berisiko menyalin file lain ke image.
-  - **D. Jalankan test itu di host/CI di luar container:** tidak perlu mengubah compose, tetapi butuh Python dan dependensi di host.
-  - Rekomendasi: **A**.
+- **Aksesnya (keputusan: opsi A).** `.env.example` ada di luar build context `./backend`, jadi `docker-compose.yml` me-mount-nya read-only ke service `api`: `./.env.example:/app/.env.example:ro`. Dipilih dibanding menyalin file (menduplikasi sumber sehingga bisa melenceng) atau mengubah build context ke root repo (menyalin file lain ke image).
+- **Hanya compose dev.** Mount ini sengaja **tidak boleh** ikut ke file compose produksi (`soc-ir`); komentarnya tertulis di `docker-compose.yml`. Image `runtime` tidak berubah.
+- **Gagal keras, bukan skip.** Jika file tidak ditemukan, test gagal dengan pesan yang menunjuk ke mount di atas. Diverifikasi: dengan mount 4 test lulus tanpa skip; tanpa mount keempatnya gagal.
+- **Awas: bind mount satu file menyimpan inode-nya.** Setelah `.env.example` diubah atau di-pull (git mengganti file), kontainer masih melihat isi lama (diverifikasi) sehingga test bisa lulus terhadap data basi. Jalankan `docker compose up -d --force-recreate api` setelah file itu berubah.
+- **CI:** jika test dijalankan langsung dari checkout repo (di luar container), file ditemukan di root repo tanpa mount. Jika dijalankan di dalam container, pakai mount yang sama.
 
 ## Catatan untuk CI/CD
 

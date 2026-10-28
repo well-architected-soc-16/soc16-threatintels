@@ -233,6 +233,8 @@ docker compose exec api ruff format --no-cache --check .
 
 Setelah mengubah kode, jalankan `docker compose up -d --build` agar image `api` terbarui sebelum menjalankan test.
 
+`tests/test_env_example.py` memastikan nilai contoh di `.env.example` selalu ditolak aplikasi dan seed. File itu di-mount read-only ke kontainer `api` oleh `docker-compose.yml` (khusus dev). Karena mount satu file menyimpan inode-nya, setelah `.env.example` diubah atau di-pull jalankan `docker compose up -d --force-recreate api` agar kontainer melihat isi terbaru; tanpa itu test bisa lulus terhadap isi lama. Jika file tidak ditemukan, test gagal (tidak di-skip).
+
 ### Struktur backend
 
 ```
