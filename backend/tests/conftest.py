@@ -12,7 +12,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import Role, User
+from app.models import IpCheck, Role, User
 
 TEST_PASSWORD = "password-uji-12-karakter"
 # Argon2 sengaja lambat; hash sekali saja untuk semua user uji.
@@ -90,6 +90,28 @@ def make_user(db: Session):
         db.add(user)
         db.commit()
         return user
+
+    return _make
+
+
+@pytest.fixture
+def make_check(db: Session):
+    def _make(
+        ip: str = "8.8.8.8", assessment_status: str = "TIDAK_TERSEDIA"
+    ) -> IpCheck:
+        check = IpCheck(
+            ip=ip,
+            assessment_status=assessment_status,
+            risk_score=None,
+            scoring_version="v1-percobaan",
+            coverage="0/2",
+            flags=[],
+            sources=[],
+            checked_by="seed",
+        )
+        db.add(check)
+        db.commit()
+        return check
 
     return _make
 
