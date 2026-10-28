@@ -24,8 +24,6 @@ def _find_existing(db: Session, check_id: int) -> IocSubmission | None:
 
 def _failure_message(exc: Exception) -> str:
     # Pesan exception pihak ketiga bisa memuat URL/kredensial; simpan hanya nama kelasnya.
-    if isinstance(exc, NotImplementedError):
-        return str(exc)
     return f"Gagal mengirim ke MISP ({type(exc).__name__})"
 
 
@@ -67,6 +65,11 @@ def _duplicate(
             "description": "Alasan kosong/kurang dari 10 karakter, atau check "
             "berstatus INPUT_DITOLAK",
         },
+        501: {
+            "model": IocOut,
+            "description": "MISP_MODE=live belum diimplementasikan; "
+            "submission tersimpan sebagai `failed`",
+        },
         502: {
             "model": IocOut,
             "description": "Pengiriman ke MISP gagal; submission tersimpan sebagai `failed`",
@@ -96,6 +99,7 @@ def submit_ioc(
     if existing is not None and existing.status != "failed":
         return _duplicate(request, db, user, existing)
 
+    is_retry = existing is not None
     if existing is None:
         # Klaim dulu: UNIQUE(check_id) menjamin hanya satu request yang lolos,
         # termasuk saat dua klik datang bersamaan.
@@ -118,7 +122,9 @@ def submit_ioc(
             return _duplicate(request, db, user, winner)
     else:
         # Percobaan ulang atas submission yang gagal memakai baris yang sama (tidak
-        # menggandakan data). UPDATE bersyarat mencegah dua retry berjalan bersamaan.
+        # menggandakan data). Transisi failed -> pending adalah satu UPDATE bersyarat
+        # (WHERE status = 'failed'): di antara request yang bersamaan hanya satu yang
+        # mendapat rowcount 1; yang lain melihat status sudah berubah dan menerima 409.
         claimed = db.execute(
             update(IocSubmission)
             .where(IocSubmission.id == existing.id, IocSubmission.status == "failed")
@@ -130,16 +136,36 @@ def submit_ioc(
                 submitted_by=user.username,
             )
         ).rowcount
-        db.commit()
         if claimed != 1:
+            db.rollback()
             db.refresh(existing)
             return _duplicate(request, db, user, existing)
+        # Audit ikut transaksi yang sama dengan klaim: retry yang lolos selalu tercatat.
+        audit.record(
+            db,
+            action="ioc_submit_retry",
+            result="success",
+            actor_username=user.username,
+            target=check.ip,
+            detail={
+                "check_id": check.id,
+                "submission_id": existing.id,
+                "previous_status": "failed",
+            },
+            ip_address=audit.client_ip(request),
+        )
+        db.commit()
         db.refresh(existing)
         submission = existing
         response.status_code = status.HTTP_200_OK
 
+    failure_http_status = status.HTTP_502_BAD_GATEWAY
     try:
         result = misp.submit_indicator(check.ip, body.reason, body.tags, user.username)
+    except NotImplementedError as exc:
+        # MISP_MODE=live belum ada: bukan error server, fiturnya memang belum tersedia.
+        failure_http_status = status.HTTP_501_NOT_IMPLEMENTED
+        result = SubmissionResult(status="failed", error_message=str(exc))
     except Exception as exc:  # noqa: BLE001
         # Klien MISP (pihak ketiga) bisa melempar apa saja; apa pun yang gagal harus
         # tersimpan sebagai `failed`, bukan menjadi 500 yang meninggalkan baris `pending`.
@@ -162,6 +188,7 @@ def submit_ioc(
             "check_id": check.id,
             "submission_id": submission.id,
             "status": submission.status,
+            "retry": is_retry,
         },
         ip_address=audit.client_ip(request),
     )
@@ -171,7 +198,7 @@ def submit_ioc(
     if submission.status == "failed":
         # Kegagalan tidak boleh tampil sebagai sukses.
         return JSONResponse(
-            status_code=status.HTTP_502_BAD_GATEWAY,
+            status_code=failure_http_status,
             content=IocOut.model_validate(submission).model_dump(mode="json"),
         )
     return submission
