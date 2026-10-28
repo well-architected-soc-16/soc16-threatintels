@@ -1,6 +1,10 @@
 import socket
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.main import app
@@ -342,14 +346,45 @@ def test_check_tidak_ada_404(client, make_user, login, db):
 
 
 def test_check_input_ditolak_tidak_boleh_dikirim_422(
-    client, make_user, make_check, login, db
+    client, make_user, make_check, login, db, use_client
 ):
+    calls = []
+
+    class Spy:
+        def submit_indicator(self, *args):
+            calls.append(args)
+
+    use_client(Spy())
     make_user("boss", Role.ADMIN)
     check = make_check(assessment_status="INPUT_DITOLAK")
 
     resp = client.post(MISP, json=_body(check.id), headers=login("boss"))
 
     assert resp.status_code == 422
+    assert "input ditolak" in resp.json()["detail"]
+    assert _submissions(db) == []  # tidak ada baris, bahkan bukan `pending`
+    assert calls == []  # klien MISP tidak dipanggil
+    db.expire_all()
+    actions = {a.action for a in db.scalars(select(AuditLog))}
+    assert not actions & {"ioc_submit", "ioc_submit_retry"}
+
+
+@pytest.mark.parametrize("ip", ["10.0.0.5", "abc", "::1"])
+def test_input_ditolak_dari_api_tidak_pernah_menjadi_check_yang_bisa_dikirim(
+    client, make_user, login, db, ip
+):
+    """Jalur nyata: POST /checks yang ditolak tidak menyimpan check, jadi tidak ada
+    check_id yang bisa dipakai untuk mengirim ke MISP."""
+    make_user("boss", Role.ADMIN)
+    headers = login("boss")
+
+    rejected = client.post("/api/v1/checks", json={"ip": ip}, headers=headers)
+    listing = client.get("/api/v1/checks", headers=headers).json()
+    submit = client.post(MISP, json=_body(1), headers=headers)
+
+    assert rejected.status_code == 422
+    assert listing["total"] == 0
+    assert submit.status_code == 404
     assert _submissions(db) == []
 
 
@@ -414,9 +449,25 @@ def test_mode_live_belum_ada_gagal_jelas_bukan_sukses(
 
     resp = client.post(MISP, json=_body(check.id), headers=login("boss"))
 
-    assert resp.status_code == 502
+    # 501 (fitur belum ada), bukan 502 (gangguan di hulu) dan bukan sukses.
+    assert resp.status_code == 501
+    assert resp.json()["status"] == "failed"
     assert "belum diimplementasikan" in resp.json()["error_message"]
     assert [s.status for s in _submissions(db)] == ["failed"]
+
+
+def test_mode_live_end_to_end_lewat_factory_dan_setting(
+    client, make_user, make_check, login, monkeypatch
+):
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "misp_mode", "live")
+    make_user("boss", Role.ADMIN)
+    check = make_check()
+
+    resp = client.post(MISP, json=_body(check.id), headers=login("boss"))
+
+    assert resp.status_code == 501
 
 
 def test_retry_submission_failed_memakai_baris_yang_sama(
@@ -442,6 +493,126 @@ def test_retry_submission_failed_memakai_baris_yang_sama(
     again = client.post(MISP, json=_body(check.id), headers=headers)
     assert again.status_code == 409
     assert flaky.calls == 2
+
+
+def test_setiap_retry_tercatat_di_audit(
+    client, make_user, make_check, login, db, use_client
+):
+    use_client(FlakyThenOkClient())
+    make_user("boss", Role.ADMIN)
+    check = make_check()
+    headers = login("boss")
+    first = client.post(MISP, json=_body(check.id), headers=headers)
+    client.post(MISP, json=_body(check.id), headers=headers)  # retry
+
+    db.expire_all()
+    logs = [
+        a
+        for a in db.scalars(select(AuditLog).order_by(AuditLog.id))
+        if a.action.startswith("ioc_submit")
+    ]
+    assert [(a.action, a.result, a.detail.get("retry")) for a in logs] == [
+        ("ioc_submit", "error", False),  # percobaan pertama gagal
+        (
+            "ioc_submit_retry",
+            "success",
+            None,
+        ),  # retry diterima (klaim failed -> pending)
+        ("ioc_submit", "success", True),  # hasil retry
+    ]
+    retry_entry = logs[1]
+    assert retry_entry.actor_username == "boss"
+    assert retry_entry.detail == {
+        "check_id": check.id,
+        "submission_id": first.json()["id"],
+        "previous_status": "failed",
+    }
+
+
+def test_retry_yang_kalah_klaim_tidak_tercatat_sebagai_retry(
+    client, make_user, make_check, login, db, use_client
+):
+    """Retry setelah submission sukses ditolak 409 dan hanya tercatat sebagai duplikat."""
+    use_client(FlakyThenOkClient())
+    make_user("boss", Role.ADMIN)
+    check = make_check()
+    headers = login("boss")
+    client.post(MISP, json=_body(check.id), headers=headers)  # gagal
+    client.post(MISP, json=_body(check.id), headers=headers)  # retry sukses
+    late = client.post(MISP, json=_body(check.id), headers=headers)  # terlambat
+
+    db.expire_all()
+    actions = [a.action for a in db.scalars(select(AuditLog).order_by(AuditLog.id))]
+    assert late.status_code == 409
+    assert actions.count("ioc_submit_retry") == 1
+    assert actions.count("ioc_submit_duplicate") == 1
+
+
+class _SlowCountingClient:
+    """Menahan pemanggilan agar jendela balapan antar-request benar-benar terbuka."""
+
+    def __init__(self):
+        self.calls = 0
+        self._lock = threading.Lock()
+
+    def submit_indicator(self, ip, reason, tags, submitted_by):
+        with self._lock:
+            self.calls += 1
+        time.sleep(0.3)
+        return SubmissionResult(status="mock_sent", misp_event_uuid="MOCK-parallel")
+
+
+def _fire_parallel(headers: dict, body: dict, n: int = 10) -> list[int]:
+    """Kirim n request benar-benar bersamaan (Barrier), tiap thread dengan klien sendiri."""
+    barrier = threading.Barrier(n)
+
+    def one(_):
+        barrier.wait()
+        return TestClient(app).post(MISP, json=body, headers=headers).status_code
+
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        return sorted(pool.map(one, range(n)))
+
+
+def test_10_retry_paralel_hanya_satu_yang_lolos(
+    client, make_user, make_check, login, db, use_client
+):
+    make_user("boss", Role.ADMIN)
+    check = make_check()
+    headers = login("boss")
+    use_client(FailingClient())
+    assert client.post(MISP, json=_body(check.id), headers=headers).status_code == 502
+    slow = _SlowCountingClient()
+    use_client(slow)
+
+    codes = _fire_parallel(headers, _body(check.id))
+
+    assert codes == [200] + [409] * 9  # tepat satu yang lolos
+    assert slow.calls == 1  # klien MISP hanya dipanggil sekali
+    stored = _submissions(db)
+    assert [s.status for s in stored] == ["mock_sent"]  # tetap satu baris
+    db.expire_all()
+    actions = [a.action for a in db.scalars(select(AuditLog))]
+    assert (
+        actions.count("ioc_submit_retry") == 1
+    )  # hanya yang lolos tercatat sebagai retry
+    assert actions.count("ioc_submit_duplicate") == 9
+
+
+def test_10_pengiriman_pertama_paralel_hanya_satu_yang_lolos(
+    client, make_user, make_check, login, db, use_client
+):
+    make_user("boss", Role.ADMIN)
+    check = make_check()
+    headers = login("boss")
+    slow = _SlowCountingClient()
+    use_client(slow)
+
+    codes = _fire_parallel(headers, _body(check.id))
+
+    assert codes == [201] + [409] * 9
+    assert slow.calls == 1
+    assert [s.status for s in _submissions(db)] == ["mock_sent"]
 
 
 def test_submission_pending_dianggap_duplikat(client, make_user, make_check, login, db):
