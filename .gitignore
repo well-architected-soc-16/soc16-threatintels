@@ -23,3 +23,7 @@ logs/
 # Rahasia lokal (password DB, dll.)
 secrets/
 .ruff_cache/
+
+# Claude Code: catatan & setting pribadi
+CLAUDE.local.md
+.claude/settings.local.json
