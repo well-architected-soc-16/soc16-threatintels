@@ -9,43 +9,38 @@ Tool ini nantinya di-deploy ke VM **soc-ir** (Ubuntu 24.04, zona SOC, <IP_SOC_IR
 (GitHub Actions → GHCR → soc-ir `docker compose pull`). Saat ini dikembangkan di laptop developer
 (CachyOS, shell **fish**, Docker + Docker Compose, RAM ~8 GB).
 
-**Status saat ini:** soc-ir dan MISP **belum terpasang**. Integrasi MISP memakai **mode mock**
-sampai MISP siap. Kode harus bisa pindah ke MISP asli hanya dengan mengubah `.env`.
+**Status:** lihat `docs/tasks/`. `TASK-xx-*.md` = rencana per tahap; `TASK-xx-progress.md` = status,
+keputusan, dan known gaps. TASK-01 (fondasi backend) selesai. soc-ir dan MISP **belum terpasang**:
+MISP memakai **mode mock**. Pindah ke MISP asli atau sumber reputasi live harus cukup dengan mengubah `.env`.
 
 ## Tech stack
 
 - Backend: Python 3.12, FastAPI, SQLAlchemy 2.x, Alembic, Pydantic v2 + pydantic-settings
 - Auth: OAuth2 password flow + JWT (**PyJWT**), hashing password **pwdlib[argon2]**
   (mengikuti tutorial resmi FastAPI "OAuth2 with Password (and hashing), Bearer with JWT tokens")
+- HTTP ke sumber eksternal: **httpx** (client bisa disuntikkan; test memakai `httpx.MockTransport`)
 - Database: PostgreSQL di container (`postgres:18-alpine`), driver psycopg 3
-- Frontend (task terpisah, BELUM sekarang): Vite + React + TypeScript
-- Test: pytest + httpx (TestClient)
+- Frontend (task terpisah, BELUM dimulai): Vite + React + TypeScript
+- Test: pytest + httpx (TestClient); lint & format: ruff
 
-## Struktur folder (target)
+## Perintah (dari root repo, fish)
 
+```fish
+docker compose up -d --build        # WAJIB setelah mengubah kode: test jalan di image, kode tidak di-mount
+docker compose exec api python -m pytest -q -p no:cacheprovider
+docker compose exec api ruff check --no-cache .
+docker compose exec api ruff format --no-cache --check .
+docker compose up -d --force-recreate api   # setelah .env.example berubah (mount satu file menyimpan inode)
 ```
-backend/
-  app/
-    main.py
-    core/        config.py, security.py, deps.py, logging.py, timeutil.py
-    db/          base.py, session.py
-    models/      user.py, audit_log.py, ip_check.py, ioc_submission.py
-    schemas/     pydantic schemas
-    routers/     health.py, auth.py, admin.py, checks.py, iocs.py
-    services/
-      ip_validation.py
-      audit.py
-      misp/      base.py (Protocol), mock.py, live.py (belum diimplementasi), __init__.py (factory)
-  alembic/ + alembic.ini
-  scripts/       seed_users.py, entrypoint.sh
-  tests/
-  Dockerfile, requirements.txt, requirements-dev.txt
-frontend/        (nanti)
-docs/tasks/      file task per tahap
-docker-compose.yml
-.env.example
-secrets/         (gitignored — berisi db_password.txt)
-```
+
+## Lokasi modul
+
+- `backend/app/core/` config, security, deps (auth/RBAC), logging, timeutil, secret_policy
+- `backend/app/routers/` health, auth, admin, checks, iocs — prefix `/api/v1`
+- `backend/app/services/` audit, ip_validation, ip_checks, `misp/` (Protocol, mock, kerangka live),
+  `sources/` (adapter AbuseIPDB/VirusTotal + mock, mulai TASK-02), `scoring.py` (mulai TASK-02)
+- `backend/alembic/versions/` migrasi; `backend/tests/` test; `backend/tests/fixtures/sources/` fixture respons sumber
+- `docs/tasks/` rencana dan progres per task
 
 ## Peran & hak akses (RBAC) — wajib ditegakkan di BACKEND
 
@@ -64,14 +59,20 @@ Uji akses negatif (viewer/analyst ditolak 403) WAJIB punya test — ini bukti KM
 
 ## Aturan domain (dari dokumen riset reputasi IP v1.1 tim)
 
-- Input v1: **satu IPv4 publik** saja. Tolak: privat/internal (termasuk IP lab (rentang privat RFC 1918)), loopback,
+- Input v1: **satu IPv4 publik** saja. Tolak: privat/internal (termasuk IP lab, rentang privat RFC 1918), loopback,
   link-local, multicast, unspecified, reserved, alamat dokumentasi, dan yang tidak `is_global`.
-  IPv6 → pesan "belum didukung". Input yang ditolak **tidak boleh memicu request keluar apa pun**.
-- Sumber v1 (BELUM diimplementasi di task awal): AbuseIPDB + VirusTotal, lewat adapter.
+  IPv6 → pesan "belum didukung". Input yang ditolak **tidak boleh memicu request keluar, akses cache, atau kuota**.
+- Sumber v1: AbuseIPDB + VirusTotal lewat adapter (`SOURCES_MODE=mock|live`). Detail rumus, pemetaan status,
+  TTL cache, dan batas kuota ada di `docs/tasks/TASK-02-sumber-reputasi-skor.md`; **jangan mengubah bobot,
+  koefisien, ambang label, atau TTL tanpa keputusan tim** (statusnya masih "percobaan").
 - `assessment_status`: `COMPLETE` (2/2), `DATA_TERBATAS` (1/2), `TIDAK_TERSEDIA` (0/2), `INPUT_DITOLAK`.
 - Status per sumber: `OK_SIGNAL`, `OK_NO_SIGNAL`, `NO_RECORD`, `INSUFFICIENT_DATA`, `ERROR`, `SKIPPED`.
+  Hanya `OK_SIGNAL` dan `OK_NO_SIGNAL` yang menambah cakupan.
 - Skor gabungan hanya dihitung jika kedua sumber bisa dinilai; selain itu `risk_score = null`.
-  Error/kosong TIDAK BOLEH diubah menjadi skor 0.
+  Error/kosong TIDAK BOLEH diubah menjadi skor 0. Nol laporan AbuseIPDB ≠ `NO_RECORD`.
+- Hasil dari adapter mock **wajib** berflag `SUMBER_SIMULASI`; data simulasi tidak boleh tampak seperti data nyata.
+- Kuota sumber dipakai **bersama** oleh semua user (satu API key): VirusTotal 4/menit & 500/hari,
+  AbuseIPDB check 1.000/hari (terverifikasi 29 Okt 2026).
 - Pengiriman ke MISP: **manual**, oleh user berwenang, **alasan wajib diisi**, klik ulang/retry
   **tidak boleh menggandakan** data. Kegagalan tidak boleh ditampilkan sebagai sukses.
 - Tidak ada auto-block berdasarkan skor TI pada v1.
@@ -79,25 +80,35 @@ Uji akses negatif (viewer/analyst ditolak 403) WAJIB punya test — ini bukti KM
 ## Aturan keamanan (repo ini PUBLIC)
 
 - JANGAN pernah commit `.env`, isi `secrets/`, API key, password, atau JWT secret.
-  Yang boleh di-commit hanya `.env.example` dengan nilai placeholder.
-- API key pihak ketiga hanya ada di backend, tidak pernah dikirim ke frontend.
-- JANGAN menulis password, token JWT, API key, atau header Authorization ke log.
+  Yang boleh di-commit hanya `.env.example` dengan nilai placeholder (berawalan `ganti-`).
+- Rahasia (password DB, API key AbuseIPDB/VirusTotal) dibaca dari **file Docker secret** (`*_FILE` → `/run/secrets/...`),
+  bukan env biasa. Developer yang membuat file itu sendiri; **jangan pernah meminta developer menempelkan
+  nilai rahasia ke chat**, dan jangan mencetak isi file di `secrets/`.
+- API key pihak ketiga hanya ada di backend, hanya dikirim lewat **header** (bukan query string), tidak pernah ke frontend.
+- JANGAN menulis password, token JWT, API key, atau header Authorization/`Key`/`x-apikey` ke log.
+  Logger `httpx`/`httpcore` di level WARNING. Pesan error konfigurasi hanya menyebut nama variabel, bukan nilainya.
+- Jangan menyimpan data kontak dari respons sumber (whois, RDAP, email/telepon) ke DB maupun fixture.
 - Postgres TIDAK di-expose ke host (tanpa `ports:`). API di-bind ke `127.0.0.1` saat dev.
 - Jangan matikan verifikasi TLS secara global (nanti untuk MISP self-signed, pakai file CA).
-- Jangan memanggil API eksternal (AbuseIPDB, VirusTotal, MISP) di test — gunakan mock/fixture.
+- Jangan memanggil API eksternal (AbuseIPDB, VirusTotal, MISP) di pytest — gunakan mock/fixture.
+  Panggilan API nyata hanya lewat skrip smoke yang dijalankan manual oleh developer (memakan kuota).
 
 ## Konvensi
 
 - Semua timestamp disimpan `timestamptz` dalam UTC; respons API memakai ISO 8601 dengan offset WIB (+07:00).
-- Prefix API: `/api/v1`. Swagger di `/docs` harus mendokumentasikan juga respons gagal (401/403/409/422).
+- Swagger di `/docs` harus mendokumentasikan juga respons gagal (401/403/409/422/501/502).
 - Log aplikasi ke stdout format JSON.
+- Satu issue → satu branch (`feat/...`, `fix/...`, `docs/...`, `chore/...`) → PR ke `main` dengan `Closes #<n>`.
+  `main` dilindungi ruleset: tidak ada push langsung.
 - Commit kecil per tahap, gaya Conventional Commits (`feat:`, `fix:`, `chore:`, `test:`, `docs:`).
 - Developer memakai shell **fish**: kalau memberi perintah, pastikan kompatibel fish
-  (mis. `source .venv/bin/activate.fish`, `set -x VAR value`).
+  (mis. `source .venv/bin/activate.fish`, `set -x VAR value`, `read -s` untuk input rahasia).
 
 ## Cara kerja yang diharapkan
 
-1. Kerjakan task **per tahap**. Setelah satu tahap selesai: jalankan pengecekan di bagian
-   "Cek selesai", laporkan hasilnya, lalu **berhenti dan tunggu konfirmasi** sebelum tahap berikut.
-2. Kalau ragu soal versi library/API, cek dokumentasi resmi; jangan menebak.
-3. Kalau ada yang gagal, laporkan apa adanya beserta penyebabnya. Jangan menyembunyikan error.
+1. Kerjakan task **per tahap** (skill `/kerjakan-tahap`). Setelah satu tahap selesai: jalankan pengecekan di bagian
+   "Cek selesai", perbarui `TASK-xx-progress.md`, laporkan hasilnya, lalu **berhenti dan tunggu konfirmasi**.
+   Jangan push atau membuka PR sebelum developer bilang lanjut.
+2. Kerjakan hanya lingkup tahap itu. Temuan di luar lingkup dicatat sebagai known gap, bukan diperbaiki diam-diam.
+3. Kalau ragu soal versi library/API, cek dokumentasi resmi; jangan menebak.
+4. Kalau ada yang gagal, laporkan apa adanya beserta penyebabnya. Jangan menyembunyikan error.
