@@ -9,7 +9,11 @@ from typing import Any
 
 import httpx
 
-from app.services.sources.base import SCORED_STATUSES, SourceResult
+from app.services.sources.base import (
+    REASON_REQUIRED_STATUSES,
+    SCORED_STATUSES,
+    SourceResult,
+)
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "sources"
 # Mudah dicari di URL, log, atau hasil bila bocor.
@@ -72,9 +76,10 @@ def assert_score_invariants(result: SourceResult) -> None:
         assert isinstance(result.normalized_score, int)
         assert not isinstance(result.normalized_score, bool)
         assert 0 <= result.normalized_score <= 100
-        assert result.reason is None
     else:
         assert result.normalized_score is None
+    # reason wajib untuk ERROR/SKIPPED, null untuk status lain (Bab 3).
+    assert (result.reason is not None) == (result.status in REASON_REQUIRED_STATUSES)
     assert result.from_cache is False
     assert result.expires_at is None
 

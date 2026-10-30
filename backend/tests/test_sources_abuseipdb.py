@@ -79,6 +79,15 @@ def test_skor_90_adalah_ok_signal():
     assert result.normalized_score == 90
 
 
+def test_skor_0_dengan_laporan_adalah_ok_no_signal():
+    result = fetch(reply(200, fixture="abuseipdb_simulasi_skor_0_ada_laporan.json"))
+
+    assert result.status is SourceStatus.OK_NO_SIGNAL
+    assert result.normalized_score == 0
+    assert result.evidence_summary["totalReports"] == 5
+    assert result.source_time == datetime(2026, 10, 20, 8, 30, tzinfo=UTC)
+
+
 def test_skor_0_dan_nol_laporan_adalah_ok_no_signal_bukan_no_record():
     result = fetch(reply(200, fixture="abuseipdb_simulasi_skor_0_nol_laporan.json"))
 
@@ -166,9 +175,12 @@ def test_respons_200_tidak_sah_adalah_error_invalid_response_bukan_skor_0(respon
 # --- error HTTP ----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("status", [401, 403])
-def test_401_dan_403_adalah_error_auth(status):
-    result = fetch(reply(status, fixture="abuseipdb_simulasi_401.json"))
+@pytest.mark.parametrize(
+    ("status", "fixture"),
+    [(401, "abuseipdb_simulasi_401.json"), (403, "abuseipdb_simulasi_403.json")],
+)
+def test_401_dan_403_adalah_error_auth(status, fixture):
+    result = fetch(reply(status, fixture=fixture))
 
     assert (result.status, result.reason) == (SourceStatus.ERROR, SourceReason.AUTH)
     assert result.http_status == status

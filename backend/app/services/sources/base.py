@@ -3,6 +3,8 @@
 Hanya tipe dan Protocol; tidak ada I/O. Pemetaan status mengikuti Bab 3 dokumen riset tim.
 Hanya `OK_SIGNAL` dan `OK_NO_SIGNAL` yang membawa `normalized_score`; status lain selalu null
 (error/kosong TIDAK BOLEH diubah menjadi skor 0).
+`reason` wajib diisi untuk `ERROR` dan `SKIPPED` (Bab 3: "SKIPPED; nilai null; sertakan alasan")
+dan harus null untuk status lain; aturan ini ditegakkan di `SourceResult.__post_init__`.
 """
 
 import enum
@@ -24,14 +26,22 @@ class SourceStatus(enum.StrEnum):
 SCORED_STATUSES = frozenset({SourceStatus.OK_SIGNAL, SourceStatus.OK_NO_SIGNAL})
 
 
-class SourceReason(enum.StrEnum):
-    """Alasan untuk status ERROR (= `error_code` di kontrak API)."""
+# Status yang wajib menyertakan `reason`; status lain wajib `reason=None`.
+REASON_REQUIRED_STATUSES = frozenset({SourceStatus.ERROR, SourceStatus.SKIPPED})
 
+
+class SourceReason(enum.StrEnum):
+    """Alasan untuk status ERROR atau SKIPPED (= `error_code` di kontrak API)."""
+
+    # ERROR
     AUTH = "AUTH"
     RATE_LIMIT = "RATE_LIMIT"
     TIMEOUT = "TIMEOUT"
     UPSTREAM = "UPSTREAM"
     INVALID_RESPONSE = "INVALID_RESPONSE"
+    # SKIPPED
+    ADAPTER_NOT_IMPLEMENTED = "ADAPTER_NOT_IMPLEMENTED"
+    QUOTA_INTERNAL = "QUOTA_INTERNAL"  # dipakai pembatas kuota (Tahap 3)
 
 
 # Flag per sumber. Digabung menjadi flag hasil akhir di Tahap 2.
@@ -60,6 +70,13 @@ class SourceResult:
     flags: tuple[str, ...] = ()
     # Detik dari header Retry-After pada 429, bila ada dan berupa angka.
     retry_after_seconds: int | None = None
+
+    def __post_init__(self) -> None:
+        needs_reason = self.status in REASON_REQUIRED_STATUSES
+        if needs_reason and self.reason is None:
+            raise ValueError(f"status {self.status} wajib menyertakan reason")
+        if not needs_reason and self.reason is not None:
+            raise ValueError(f"status {self.status} tidak boleh membawa reason")
 
 
 class ReputationSource(Protocol):
