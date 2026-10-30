@@ -29,14 +29,14 @@ Tools ini mendukung proses analisis SOC. SIEM, pengelolaan kasus insiden, dan re
 | Fitur | Hasil yang dituju | Status |
 |---|---|---|
 | Pemeriksaan reputasi IP | Pengguna memasukkan alamat IP dan memperoleh informasi reputasinya | Sebagian: validasi input dan penyimpanan hasil sudah ada; data reputasi belum |
-| Agregasi sumber eksternal | Hasil dari sumber yang dipilih disajikan dalam format yang konsisten | Direncanakan (adapter belum dibuat) |
+| Agregasi sumber eksternal | Hasil dari sumber yang dipilih disajikan dalam format yang konsisten | Sebagian (adapter dan mode mock sudah ada; sumber live belum aktif) |
 | Penyajian hasil | Hasil menampilkan sumber, waktu pemeriksaan, dan konteks reputasi yang tersedia | Sebagian: sumber, status, dan waktu tampil; skor belum dihitung |
 | REST API | Pemeriksaan dapat diakses melalui endpoint yang terdokumentasi | Tersedia (lihat [Daftar Endpoint](#daftar-endpoint)) |
 | Dokumentasi Swagger | Endpoint, parameter, respons, dan kesalahan dapat diperiksa dan diuji | Tersedia di `/docs`, termasuk respons gagal |
 | Frontend web | Pengguna dapat melakukan pemeriksaan melalui browser | Direncanakan |
 | Integrasi MISP | Indikator hasil analisis dapat dikirim ke MISP | Sebagian: mode mock saja; MISP asli belum |
 
-Sumber v1 adalah AbuseIPDB dan VirusTotal; adapter dan perhitungan skor belum diimplementasikan. Perbedaan penilaian antar-sumber perlu tetap terlihat agar hasil dapat ditelusuri.
+Sumber v1 adalah AbuseIPDB dan VirusTotal; adapter, skor gabungan, label, dan flag sudah ada (mode mock); sumber live menunggu cache dan pembatas kuota. Perbedaan penilaian antar-sumber perlu tetap terlihat agar hasil dapat ditelusuri.
 
 ## Hubungan dengan SOC
 
@@ -60,7 +60,7 @@ Panduan RKS301 KM-5 mensyaratkan minimal satu sumber TI eksternal benar-benar di
 | Autentikasi | OAuth2 password flow + JWT (PyJWT), hash password argon2 (pwdlib) | Berjalan (lokal) |
 | Dokumentasi API | Swagger/OpenAPI di `/docs` | Tersedia |
 | Frontend | Vite + React + TypeScript | Belum dimulai |
-| Sumber reputasi | AbuseIPDB dan VirusTotal lewat adapter | Belum diimplementasikan |
+| Sumber reputasi | AbuseIPDB dan VirusTotal lewat adapter | Adapter dan mode mock sudah ada; mode live belum aktif |
 | Integrasi indikator | MISP | Mode mock; MISP asli belum |
 | Penyimpanan data | PostgreSQL 18 (psycopg 3) di kontainer | Berjalan (lokal) |
 | CI/CD | GitHub Actions dengan pemeriksaan keamanan dan build | Belum dibuat |
@@ -179,13 +179,19 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/checks \
     -d '{"ip":"8.8.8.8"}'
 ```
 
-Hasil cek untuk IP publik saat ini berupa `assessment_status: "TIDAK_TERSEDIA"`, `coverage: "0/2"`, `risk_score: null`, dan kedua sumber berstatus `SKIPPED` dengan alasan `ADAPTER_NOT_IMPLEMENTED`. Itu perilaku yang disengaja sampai adapter dibuat: data yang tidak ada tidak pernah diubah menjadi skor 0.
+Hasil cek memuat hasil per sumber (`sources`), `risk_score`, `indication`, `assessment_status`, `coverage`, dan `flags`. Pada `SOURCES_MODE=mock` (default) **semua hasil bersifat simulasi** dan ber-flag `SUMBER_SIMULASI` (lihat bagian berikut). Contoh untuk `1.1.1.1`: `risk_score: 85.5`, `indication: "SANGAT_TINGGI"`, `assessment_status: "COMPLETE"`, `coverage: "2/2"`, `flags: ["SUMBER_SIMULASI"]`.
+
+- `risk_score = (30×A + 25×V) / 55`, hanya jika **kedua** sumber bisa dinilai (`OK_SIGNAL`/`OK_NO_SIGNAL`); selain itu `null`. Error, timeout, atau data kosong tidak pernah diubah menjadi skor 0. Respons membulatkan 1 desimal, database menyimpan nilai penuh.
+- `indication` dihitung dari nilai sebelum pembulatan: `< 25` `RENDAH`, `25 – < 50` `PERLU_PEMERIKSAAN`, `50 – < 75` `TINGGI`, `75 – 100` `SANGAT_TINGGI`. Bobot dan ambang ini masih percobaan (`scoring_version: "v1-percobaan"`).
+- `flags`: `HASIL_BERBEDA` (kedua sumber tersedia dan selisihnya ≥ 50), `NO_VENDOR_OPINION`, `WHITELISTED` (AbuseIPDB `isWhitelisted: true`; tidak memangkas skor), dan `SUMBER_SIMULASI`.
+- Cek ber-flag `SUMBER_SIMULASI` **ditolak `POST /iocs/misp` dengan 422**, tanpa membuat submission dan tanpa menghubungi MISP.
+- Cek lama (sebelum Tahap 2) hanya menyimpan `source`, `status`, dan `reason` per sumber; field lain bernilai bawaan saat dibaca.
 
 IP yang ditolak (privat, loopback, link-local, multicast, dokumentasi, reserved, IPv6, atau format salah) dijawab **422** dengan `assessment_status: "INPUT_DITOLAK"` dan `reason_code`; input yang ditolak tidak memicu permintaan keluar apa pun.
 
 ### Sumber reputasi dan mode simulasi
 
-Adapter AbuseIPDB dan VirusTotal ada di `backend/app/services/sources/`. Sampai Tahap 2 TASK-02 selesai, adapter belum dipanggil dari `POST /checks`; `SOURCES_MODE=live` juga masih ditolak aplikasi (menunggu pembatas kuota).
+Adapter AbuseIPDB dan VirusTotal ada di `backend/app/services/sources/`. `POST /checks` memanggil adapter lewat `SOURCES_MODE`; `SOURCES_MODE=live` masih ditolak aplikasi (menunggu pembatas kuota, Tahap 3 TASK-02).
 
 Pada `SOURCES_MODE=mock`, adapter mock menjawab tanpa jaringan dan **semua hasilnya fiktif**. Setiap hasil, termasuk yang berstatus `ERROR`, diberi flag `SUMBER_SIMULASI` dan `"simulasi": true` di bukti. Skenario dipilih dari tabel IP demo berikut (IP resolver publik terkenal, supaya hasil "berbahaya" yang jelas palsu tidak mencoreng pihak kecil). IP di luar tabel mendapat hasil bawaan: kedua sumber `OK_NO_SIGNAL` dengan skor 0.
 
@@ -216,7 +222,7 @@ Semua endpoint berawalan `/api/v1`. Selain `/health` dan `/auth/login`, semuanya
 | POST | `/checks` | admin, analyst | Cek satu IPv4 publik | 401, 403, 422 (`INPUT_DITOLAK`) |
 | GET | `/checks` | semua peran | Riwayat cek (`limit` 1-100, `offset`; terbaru dulu) | 401, 422 |
 | GET | `/checks/{id}` | semua peran | Detail satu cek | 401, 404 |
-| POST | `/iocs/misp` | admin, atau analyst dengan `can_send_misp` | Kirim IoC ke MISP; `reason` wajib (minimal 10 karakter) | 401, 403, 404, 409 (sudah pernah dikirim; berisi `submission_id`), 422, 501 (`MISP_MODE=live` belum diimplementasikan), 502 (pengiriman gagal) |
+| POST | `/iocs/misp` | admin, atau analyst dengan `can_send_misp` | Kirim IoC ke MISP; `reason` wajib (minimal 10 karakter) | 401, 403, 404, 409 (sudah pernah dikirim; berisi `submission_id`), 422 (alasan pendek, `INPUT_DITOLAK`, atau `SUMBER_SIMULASI`), 501 (`MISP_MODE=live` belum diimplementasikan), 502 (pengiriman gagal) |
 | GET | `/iocs` | semua peran | Daftar pengiriman IoC (paginasi seperti `/checks`) | 401, 422 |
 
 Pengiriman IoC bersifat manual dan tidak menggandakan data: satu cek hanya punya satu pengiriman, jadi klik ulang menghasilkan 409. Pengiriman yang `failed` dapat dikirim ulang (respons 200, baris yang sama). Kegagalan tidak pernah ditampilkan sebagai sukses.

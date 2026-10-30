@@ -12,6 +12,7 @@ from app.schemas.common import FORBIDDEN, UNAUTHORIZED, ErrorResponse
 from app.schemas.ioc import IocDuplicate, IocOut, IocPage, IocSubmit
 from app.services import audit
 from app.services.misp import MispClient, SubmissionResult, get_misp_client
+from app.services.sources.base import FLAG_SUMBER_SIMULASI
 
 MispUser = Annotated[User, Depends(require_misp_permission)]
 
@@ -62,8 +63,9 @@ def _duplicate(
             "description": "Check sudah pernah dikirim; berisi id submission yang ada",
         },
         422: {
-            "description": "Alasan kosong/kurang dari 10 karakter, atau check "
-            "berstatus INPUT_DITOLAK",
+            "description": "Alasan kosong/kurang dari 10 karakter, check berstatus "
+            "INPUT_DITOLAK, atau check ber-flag SUMBER_SIMULASI (hasil simulasi "
+            "tidak boleh masuk MISP; tidak ada submission yang dibuat)",
         },
         501: {
             "model": IocOut,
@@ -93,6 +95,12 @@ def submit_ioc(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Cek dengan input ditolak tidak boleh dikirim ke MISP",
+        )
+    if FLAG_SUMBER_SIMULASI in check.flags:
+        # Data simulasi bukan reputasi nyata. Berhenti sebelum baris submission, klien MISP, dan audit.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Cek ini berisi hasil simulasi (SUMBER_SIMULASI) dan tidak boleh dikirim ke MISP",
         )
 
     existing = _find_existing(db, check.id)

@@ -28,33 +28,37 @@ def _count(db, model) -> int:
 # --- POST /checks: input valid ------------------------------------------
 
 
-def test_ip_publik_disimpan_sebagai_placeholder_jujur(client, make_user, login):
+def test_tidak_ada_sumber_yang_bisa_dinilai_tidak_menjadi_skor_nol(
+    client, make_user, login
+):
+    # 8.8.4.4 di mode mock: AbuseIPDB ERROR/TIMEOUT dan VirusTotal NO_RECORD.
     make_user("analyst", Role.ANALYST)
 
-    resp = client.post(CHECKS, json={"ip": "8.8.8.8"}, headers=login("analyst"))
+    resp = client.post(CHECKS, json={"ip": "8.8.4.4"}, headers=login("analyst"))
 
     assert resp.status_code == 201
     body = resp.json()
-    assert body["ip"] == "8.8.8.8"
+    assert body["ip"] == "8.8.4.4"
     assert body["assessment_status"] == "TIDAK_TERSEDIA"
     assert body["coverage"] == "0/2"
     assert body["risk_score"] is None  # bukan 0
+    assert body["indication"] is None
     assert body["scoring_version"] == "v1-percobaan"
-    assert body["flags"] == []
+    assert body["flags"] == ["SUMBER_SIMULASI"]
     assert body["checked_by"] == "analyst"
     assert body["checked_at"].endswith("+07:00")
-    assert body["sources"] == [
-        {
-            "source": "abuseipdb",
-            "status": "SKIPPED",
-            "reason": "ADAPTER_NOT_IMPLEMENTED",
-        },
-        {
-            "source": "virustotal",
-            "status": "SKIPPED",
-            "reason": "ADAPTER_NOT_IMPLEMENTED",
-        },
-    ]
+    abuse, vt = body["sources"]
+    assert (abuse["source"], abuse["status"], abuse["reason"]) == (
+        "abuseipdb",
+        "ERROR",
+        "TIMEOUT",
+    )
+    assert (vt["source"], vt["status"], vt["reason"]) == (
+        "virustotal",
+        "NO_RECORD",
+        None,
+    )
+    assert abuse["normalized_score"] is None and vt["normalized_score"] is None
 
 
 def test_admin_juga_boleh_membuat_cek(client, make_user, login):
@@ -86,7 +90,9 @@ def test_cek_valid_tercatat_di_audit(client, make_user, login, db):
         "analyst",
         "8.8.8.8",
     )
-    assert entry.detail["assessment_status"] == "TIDAK_TERSEDIA"
+    # 8.8.8.8 di mode mock: A=90 (OK_SIGNAL), VirusTotal ERROR/TIMEOUT.
+    assert entry.detail["assessment_status"] == "DATA_TERBATAS"
+    assert entry.detail["sources"] == {"abuseipdb": "OK_SIGNAL", "virustotal": "ERROR"}
 
 
 # --- POST /checks: input ditolak ----------------------------------------
@@ -139,7 +145,7 @@ def test_input_ditolak_tidak_memicu_adapter_maupun_koneksi_keluar(
     monkeypatch.setattr(
         checks_router.ip_checks,
         "collect_sources",
-        lambda ip: adapter_calls.append(ip) or [],
+        lambda ip, sources: adapter_calls.append(ip) or [],
     )
     monkeypatch.setattr(socket.socket, "connect", fail_network)
     monkeypatch.setattr(socket, "getaddrinfo", fail_network)
@@ -156,7 +162,7 @@ def test_ip_valid_memanggil_adapter_tepat_sekali(client, make_user, login, monke
     headers = login("analyst")
     adapter_calls = []
 
-    def spy(ip):
+    def spy(ip, sources):
         adapter_calls.append(ip)
         return []
 
@@ -197,7 +203,7 @@ def test_viewer_ditolak_tanpa_memvalidasi_atau_memanggil_adapter(
     monkeypatch.setattr(
         checks_router.ip_checks,
         "collect_sources",
-        lambda ip: adapter_calls.append(ip) or [],
+        lambda ip, sources: adapter_calls.append(ip) or [],
     )
 
     resp = client.post(CHECKS, json={"ip": "8.8.8.8"}, headers=headers)
