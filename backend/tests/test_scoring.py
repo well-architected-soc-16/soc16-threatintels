@@ -145,6 +145,27 @@ def test_batas_label_tepat_di_25_50_75_lewat_rumus(a_v, score, label):
     assert scoring.indication(combined) == label
 
 
+def test_skor_kelipatan_sepelas_jadi_tidak_ada_seri_pembulatan_dan_label_stabil():
+    """Menutup known gap 10 dengan bukti, bukan asumsi.
+
+    `(30A + 25V) / 55 = (6A + 5V) / 11`, jadi skor selalu kelipatan 1/11. Seri di titik tengah
+    1 desimal (`x.x5`) butuh `20(6A + 5V) = 22k + 11`: sisi kiri genap, sisi kanan ganjil, mustahil.
+    Kasus 74,96 di test lain adalah pengaman desain (label dari nilai tersimpan); ia tidak
+    muncul dari input nyata, karena 74,96 bukan kelipatan 1/11.
+    """
+    for a in range(101):
+        for v in range(101):
+            score = scoring.combined_score(pair(a, v))
+
+            assert abs(round(score * 11) - score * 11) < 1e-9
+            # Aritmetika bilangan bulat, tanpa float:
+            assert (20 * (6 * a + 5 * v)) % 22 != 11
+            # Nilai terdekat di bawah batas label berjarak 1/11, dibulatkan menjadi batas - 0,1:
+            # tampilan tidak pernah menyeberangkan batas, jadi label dari nilai asli dan dari
+            # nilai yang dibulatkan selalu sama.
+            assert scoring.indication(round(score, 1)) == scoring.indication(score)
+
+
 # --- flag -----------------------------------------------------------------------
 
 
@@ -344,6 +365,24 @@ def test_data_nyata_a7_v0_menjadi_3_8_rendah_complete_tanpa_hasil_berbeda():
     assert scoring.indication(assessment.risk_score) == "RENDAH"
     assert (assessment.assessment_status, assessment.coverage) == ("COMPLETE", "2/2")
     assert assessment.flags == []  # tanpa HASIL_BERBEDA dan tanpa SUMBER_SIMULASI
+
+
+def test_is_whitelisted_null_dari_respons_abuseipdb_tidak_menghasilkan_flag():
+    # Fixture ini memuat `"isWhitelisted": null` (API memang bisa mengirim null).
+    results = ip_checks.collect_sources(
+        "8.8.8.8",
+        live_adapters(
+            reply(200, fixture="abuseipdb_simulasi_skor_0_nol_laporan.json"),
+            reply(200, fixture=NYATA_VIRUSTOTAL),
+        ),
+    )
+    assessment = ip_checks.assess(results)
+
+    assert results[0].evidence_summary["isWhitelisted"] is None
+    assert scoring.FLAG_WHITELISTED not in assessment.flags
+    assert assessment.flags == []
+    # Tidak ada pemangkasan atau efek lain ke skor.
+    assert round(assessment.risk_score, 1) == 0.0
 
 
 # --- bentuk tersimpan -------------------------------------------------------------------
