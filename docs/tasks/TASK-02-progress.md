@@ -10,7 +10,7 @@ Diperbarui: 2026-10-31. Rujukan: [`TASK-02-sumber-reputasi-skor.md`](TASK-02-sum
 | 0 | Konfigurasi sumber + API key sebagai secret | #22 | Selesai, ter-merge |
 | 1 | Adapter AbuseIPDB + VirusTotal, pemetaan status | #23 | Selesai, ter-merge |
 | 2 | Skor, label, flag, kontrak respons | #24 | Selesai, ter-merge |
-| 3 | Cache + pembatas kuota bersama | (belum dibuka) | Selesai di lokal, menunggu "push" dari developer |
+| 3 | Cache + pembatas kuota bersama | #25 | Selesai, ter-merge |
 | 4 | Uji API nyata + rapikan | - | Belum |
 
 Hasil terakhir (Tahap 3): `pytest` **740 passed**, `ruff check` dan `ruff format --check` bersih, `docker compose ps` `db` dan `api` `healthy`.
@@ -215,17 +215,72 @@ Ditambahkan di akhir Tahap 2 (dari known gap 9) sebagai syarat Tahap 3. **Semuan
 2. **Test yang wajib ditulis di Tahap 3** (cache dan limiter belum ada, jadi belum bisa ditulis sekarang): untuk setiap input yang ditolak (`PRIVATE`, `LOOPBACK`, `INVALID_FORMAT`, `IPV6_NOT_SUPPORTED`, dst.) dan untuk viewer (403), pakai spy pada cache dan limiter lalu pastikan **nol** pembacaan cache, **nol** penulisan cache, dan **nol** hitungan kuota; ditambah satu test bahwa membangun `get_sources()` tidak menyentuh keduanya. Lakukan uji mutasi: memindahkan akses cache/limiter ke dependency harus membuat test ini gagal. Pola yang sudah ada dan bisa ditiru: `test_input_ditolak_tidak_memanggil_sumber_yang_disuntikkan` dan `test_viewer_tidak_memanggil_sumber`.
 3. Tinjau known gap 11 (`except` di `collect_sources`) sebelum guard `SOURCES_MODE=live` dicabut.
 
+## Catatan untuk Tahap 4
+
+Ditulis 31 Okt 2026 saat Tahap 3 selesai (PR #25, kini ter-merge), supaya sesi berikutnya tidak perlu membaca ulang percakapan. Rencana asli ada di `TASK-02-sumber-reputasi-skor.md` (Tahap 4); catatan ini hanya menambahkan yang dipelajari sejak itu. Tahap 4 adalah **satu-satunya PR yang memakai `Closes #20`**.
+
+### Sisa pekerjaan menurut rencana, dan statusnya sekarang
+
+1. **`scripts/smoke_sources.py`** (belum ada). Dijalankan manual oleh developer, bukan bagian pytest, dengan `SOURCES_MODE=live`, untuk satu IP publik (bawaan `118.25.6.39`, argumen `--ip`).
+   - Harus lewat **limiter yang sama**: pakai `build_sources()` dibungkus `SourceGateway` dengan engine dari `app.db.session.get_engine()` (lihat `get_sources` di `services/sources/factory.py`), bukan memanggil adapter langsung. Dengan begitu panggilan ikut terhitung kuota dan tercatat di `source_calls`.
+   - Cetak: sumber, HTTP status, status hasil, reason, durasi, dan untuk AbuseIPDB `rate_limit_remaining` (field `SourceResult.rate_limit_remaining` sudah ada sejak Tahap 3). **Jangan pernah mencetak key atau header request.**
+   - Perlu test (tanpa jaringan, `MockTransport`) yang membuktikan keluaran skrip tidak memuat key palsu, termasuk di jalur error.
+2. **README.** Sudah ada: arti status/flag/indication (Tahap 2), peringatan kuota VirusTotal 4/menit dan tabel IP demo beserta catatan fiktif/MISP (Tahap 1 dan 3), cache dan kuota (Tahap 3), cara membuat file key. **Belum ada**: langkah eksplisit mengaktifkan mode live (isi key dengan `read -s`, ubah `SOURCES_MODE=live` di `.env`, `docker compose up -d --force-recreate api`) dan cara menjalankan skrip smoke.
+3. **Tandai known gap #4 TASK-01 selesai** di `TASK-01-progress.md` (coverage untuk `NO_RECORD`/`INSUFFICIENT_DATA`). Perilakunya sudah benar dan dites sejak Tahap 2 (`test_scoring.py`); yang tersisa hanya mencoret catatannya.
+4. Perbarui file ini (status Tahap 3 dan 4, hasil test, gap), `ruff check` dan `ruff format --check` bersih.
+
+### Yang harus dibuktikan dengan API nyata (known gap 15)
+
+Seluruh mode live sejauh ini hanya diuji lewat `MockTransport` dan fixture. Fixture simulasi 401/403/429 dan body error AbuseIPDB 403 dibuat sendiri, bukan salinan respons nyata. Di Tahap 4 cocokkan:
+- Format nyata `X-RateLimit-Reset` (epoch detik? zona?) dan `X-RateLimit-Remaining` dari AbuseIPDB. Kode membaca bilangan bulat non-negatif dan mengabaikan selain itu; reset harian AbuseIPDB bergantung padanya (Keputusan 11).
+- Perilaku `Retry-After` pada 429 (angka detik atau tanggal HTTP; tanggal HTTP saat ini diabaikan, cooldown 60 detik).
+- Bentuk respons 200 nyata terhadap fixture 29 Okt (`118.25.6.39`), dan 404 `NotFoundError` VirusTotal bila mudah didapat dengan IP publik yang belum dikenal.
+- **Jangan sengaja memicu 429 atau menghabiskan kuota**: kuota dipakai bersama tim.
+
+### Hati-hati kuota dan bukti
+
+- Satu cek live memakai 1 kuota AbuseIPDB dan 1 kuota VirusTotal (VirusTotal hanya 4 per menit). Jangan mengulang skrip berturut-turut.
+- Cek kedua untuk IP yang sama lewat Swagger harus dari cache (`from_cache: true`) dan tidak boleh menambah baris `source_calls`. Cara memeriksa (fish):
+
+  ```fish
+  docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT source, mode, http_status, result_status, rate_limit_remaining FROM source_calls ORDER BY id DESC LIMIT 5"'
+  ```
+- Simpan keluaran skrip ke folder bukti **di luar repo** (Bab 9 "API nyata": tanggal, paket akun, HTTP status, field, kuota, durasi). Bukti curl 29 Okt (HTTP 200, kuota 1.000/hari dan 500/hari) tetap ditunjukkan terpisah saat demo.
+- Perintah "Cek selesai" untuk developer (fish), setelah `.env` diubah ke `SOURCES_MODE=live`:
+
+  ```fish
+  docker compose up -d --force-recreate api
+  docker compose exec api python -m scripts.smoke_sources --ip 118.25.6.39
+  ```
+  Key diisi developer sendiri tanpa menampilkannya, mis. `read -s key; printf '%s' $key > secrets/abuseipdb_api_key.txt; set -e key` (lalu `chmod 644`, bukan 600; lihat known gap 2). Jangan tempel key ke chat.
+
+### Keputusan yang masih menunggu developer atau tim
+
+- **Demo MISP 4 Nov (gap 8)**: tunjukkan penolakan 422 atas hasil simulasi, atau jalankan Tahap 4 lebih dulu dan kirim cek live ke `MISP_MODE=mock` (hasil `mock_sent`).
+- Mulai demo dari DB kosong atau sebut hasil mock sebagai "simulasi" (gap 19).
+- Konfirmasi syarat non-komersial VirusTotal ke dosen sebelum soc-ir dipakai operasional (gap 21).
+- Issue terpisah migrasi `httpx2` setelah demo (gap 4); kebijakan retensi tabel cache/log (gap 13); menutup transaksi sesi request sebelum memanggil sumber (gap 17); force refresh dan badge simulasi di frontend (gap 18, 19).
+- Bobot, ambang label, dan TTL masih percobaan (gap 22).
+
+### Catatan lingkungan dev (agar tidak mengulang kebingungan)
+
+- Sesi Claude Code berjalan dari dalam AppImage Alethe, sehingga shell mewarisi `LD_LIBRARY_PATH`, `LD_PRELOAD`, `PYTHONHOME`, dan `PYTHONPATH` yang menunjuk ke `/tmp/.mount_...`. Akibatnya di shell itu `git push`/`gh` gagal (`symbol lookup error ... libcurl ... nghttp2`), dan `curl` serta `python3` host rusak. Solusi tanpa mengubah sistem: jalankan perintah jaringan dengan `env -u LD_LIBRARY_PATH -u LD_PRELOAD -u PYTHONHOME -u PYTHONPATH git push ...`. Python host tidak dipakai; semua Python lewat kontainer.
+- Kode tidak di-mount ke kontainer `api`: setiap perubahan kode perlu `docker compose up -d --build`. `.env.example` di-mount per file, jadi setelah berubah wajib `docker compose up -d --force-recreate api` sebelum gerbang kualitas (kalau tidak, `test_env_example` membaca isi lama).
+- Perintah untuk developer ditulis untuk shell fish; shell tempat Claude Code menjalankan perintah adalah zsh (mis. variabel berisi spasi tidak otomatis terpecah menjadi argumen).
+- Migrasi berjalan otomatis di entrypoint kontainer `api`; DB dev developer sudah di revisi `0004`.
+- Urutan kerja Tahap 4: #25 sudah ter-merge, jadi `git switch main && git pull`, lalu branch `feat/task-02-tahap-4-...`.
+
 ## Known gaps
 
 1. **Pengaturan awal bertambah dua file.** `docker compose up` gagal bila `secrets/abuseipdb_api_key.txt` atau `secrets/virustotal_api_key.txt` tidak ada (Keputusan 14). Developer yang sudah punya stack harus menjalankan `touch` sekali setelah pull. README sudah menjelaskan; CI nanti harus membuat kedua file itu juga.
 2. ~~Teks "Cek selesai" Tahap 0 di file rencana memuat `chmod 600 secrets/*.txt`~~ **Selesai**: dikoreksi menjadi `chmod 644` dengan alasan singkat (lihat keputusan 1).
-3. **Uji start `live` dengan file key valid lewat kontainer** baru bisa dilakukan setelah guard dicabut (Tahap 3); sebelum itu hanya dibuktikan lewat test subprocess.
+3. ~~Uji start `live` dengan file key valid lewat kontainer baru bisa dilakukan setelah guard dicabut~~ **Selesai di Tahap 3**: dibuktikan lewat kontainer sekali pakai (key palsu di `/tmp`), lihat "Cek selesai (rencana Tahap 3)". Yang dibuktikan hanya konfigurasi dan import aplikasi; entrypoint (alembic + uvicorn) tidak dijalankan pada kasus itu.
 4. **Peringatan deprecation Starlette `TestClient`** (`StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated; install httpx2 instead`, dari `fastapi/testclient.py:1`) muncul di ringkasan pytest. **Sudah ada sebelum Tahap 0**: dicek 2026-10-30 dengan menjalankan test `main` (commit `1badd61`) di worktree sementara memakai image yang sama (fastapi 0.162.0, starlette 1.10.0, httpx 0.28.1; `requirements.txt` fastapi dan httpx identik dengan Tahap 0, httpx hanya pindah file): 209 passed, 1 warning, teks sama. Jadi bukan akibat Tahap 0. Belum diperbaiki.
    **Keputusan (developer, 2026-10-31):** Tahap 1 tetap memakai `httpx`. Migrasi ke `httpx2` dikerjakan sebagai issue terpisah setelah demo, karena nama logger dan trust store SSL berubah. Nama logger berubah berarti pengaman logging (`httpx`/`httpcore` dipaku di `WARNING`, lihat Tahap 0) tidak lagi mengenai logger client baru; trust store SSL berubah berarti perilaku verifikasi TLS ke sumber dan nanti ke MISP perlu diuji ulang. Sampai migrasi, warning ini dibiarkan.
 5. ~~Pemetaan Tahap 1 belum dicocokkan dengan Bab 3 dokumen riset~~ **Selesai**: dicocokkan dengan Bab 3 oleh developer, 31 Okt; satu koreksi (`reason` SKIPPED, lihat keputusan 5). PDF riset tidak ditambahkan ke repo.
 6. ~~Test `assess()` untuk status non-`OK_*` belum ada~~ **Selesai di Tahap 2**: `test_scoring.py` menguji bahwa `NO_RECORD`, `INSUFFICIENT_DATA`, `ERROR`, dan `SKIPPED` tidak menambah cakupan (Keputusan 6 rencana).
 7. ~~Belum ada pemakai `SourceResult` di luar test~~ **Selesai di Tahap 2**: `ip_checks.to_stored` (JSON, waktu UTC) dan skema respons `SourceResult` (waktu WIB).
-8. **Mode mock membuat semua cek baru ber-flag `SUMBER_SIMULASI` sehingga tidak ada cek yang bisa dikirim ke MISP lewat alur normal** sampai sumber live aktif (Tahap 3). Itu disengaja (Keputusan 10), tetapi demo MISP 4 Nov harus memakai cek bertanda data nyata atau menunggu Tahap 3. Test memakai adapter live di atas `MockTransport` untuk membuktikan cek tanpa flag tetap bisa dikirim. **Pembaruan Tahap 3:** mode live kini ada, jadi cek tanpa simulasi bisa terjadi, tetapi belum pernah diuji dengan API nyata (Tahap 4). Untuk demo 4 Nov, tanpa Tahap 4 pengiriman ke MISP hanya bisa ditunjukkan sebagai penolakan 422 atas hasil simulasi.
+8. **TERBUKA, mempengaruhi demo 4 Nov: MISP tidak bisa didemokan dengan hasil mock.** Pada `SOURCES_MODE=mock` (default) setiap cek baru ber-flag `SUMBER_SIMULASI`, dan `POST /iocs/misp` menolaknya dengan 422 (Keputusan 10: data simulasi tidak boleh masuk MISP atau blocklist). Akibatnya tidak ada cek yang bisa dikirim ke MISP lewat alur normal selama mode mock. Itu disengaja, bukan bug. Mode live kini ada (Tahap 3), jadi cek tanpa flag simulasi bisa terjadi, **tetapi mode live belum pernah menyentuh API nyata** (gap 15) dan baru diuji pertama kali di Tahap 4. Test membuktikan cek tanpa flag tetap bisa dikirim memakai adapter live di atas `MockTransport` dan cek data nyata 29 Okt. Pilihan untuk demo (perlu keputusan developer sebelum 4 Nov): (a) tunjukkan penolakan 422 itu sendiri sebagai bukti guard bekerja; atau (b) selesaikan Tahap 4, jalankan satu cek live, lalu kirim cek itu (pengiriman ke MISP masih `MISP_MODE=mock` karena MISP asli belum terpasang, jadi hasilnya `mock_sent`).
 9. ~~`get_sources` dijalankan sebagai dependency sebelum body `POST /checks` diperiksa~~ **Selesai di Tahap 3**: `get_sources` hanya menyimpan referensi engine; cache dan kuota hanya disentuh di `SourceGateway.fetch` setelah `validate_ip` lolos, dibuktikan spy dan uji mutasi (lihat "Catatan untuk Tahap 3").
 10. ~~Pembulatan memakai `round()` Python dan titik tengah bisa dibulatkan ke arah yang tidak terduga~~ **Ditutup dengan bukti (Tahap 2)**: `(30A + 25V) / 55 = (6A + 5V) / 11`, jadi skor selalu kelipatan 1/11 dan seri di titik tengah 1 desimal (`x.x5`) mustahil (`20(6A + 5V) = 22k + 11`: genap vs ganjil). `test_skor_kelipatan_sepelas_jadi_tidak_ada_seri_pembulatan_dan_label_stabil` memeriksa seluruh 101×101 pasangan A,V dan juga bahwa label dari nilai asli sama dengan label dari nilai yang dibulatkan. Akibatnya kasus 74,96 (tampil `75.0`, label `TINGGI`) adalah **pengaman desain** (label dari nilai tersimpan) yang tidak terjadi dari input nyata dengan rumus ini. Bukti ini gugur bila bobot atau jumlah sumber berubah (mutasi bobot 30→31 menggagalkan test), jadi test itu harus ikut ditinjau saat tim mengubah rumus.
 11. ~~Tanpa `except` di `collect_sources`, bug di satu adapter membuat seluruh cek menjadi 500~~ **Selesai di Tahap 3** atas keputusan developer: isolasi per sumber dengan reason `INTERNAL_ERROR` (Tahap 3 keputusan 10). Sisa celahnya ada di gap 12.
@@ -235,3 +290,8 @@ Ditambahkan di akhir Tahap 2 (dari known gap 9) sebagai syarat Tahap 3. **Semuan
 15. **Mode live belum pernah dijalankan terhadap API nyata.** Format sebenarnya `X-RateLimit-Reset`, perilaku `Retry-After`, dan kuota riil baru terbukti di Tahap 4. `Retry-After` berbentuk tanggal HTTP diabaikan (cooldown 60 detik).
 16. **Jendela VirusTotal 4 per menit dihitung geser 60 detik**, bukan menit kalender seperti di server VirusTotal; lebih ketat, jadi tidak pernah melebihi batas, tetapi bisa menolak permintaan yang masih sah di sisi server.
 17. **Sesi request tetap dalam transaksi selama sumber dipanggil.** Dependency autentikasi memakai sesi request sehingga `db.in_transaction()` bernilai `True` saat `collect_sources` berjalan (diperiksa langsung di Tahap 3), dan setiap langkah gerbang membuka koneksi kedua. Satu cek aktif memegang hingga 2 koneksi; dengan pool bawaan SQLAlchemy (5 + 10 overflow) sekitar 7 cek live bersamaan sudah menghabiskan pool dan sisanya menunggu (batas tunggu bawaan 30 detik). Request live bisa memakan hingga 10 detik per sumber (`SOURCE_TIMEOUT_SECONDS`). `TimeoutError` pool di dalam gerbang akan terisolasi sebagai `INTERNAL_ERROR` (keputusan Tahap 3 nomor 11), bukan 500. **Aman untuk demo dan tim 4 orang**, jadi tidak diperbaiki di Tahap 3. Perbaikan nanti: tutup transaksi sesi request sebelum memanggil sumber (alternatif: menaikkan `pool_size`).
+18. **Tanpa force refresh** (known gap 2 rencana, 29 Okt). Analis tidak bisa melewati cache sebelum TTL habis (mis. `OK_NO_SIGNAL` 24 jam). Sekarang lebih terasa karena cache benar-benar ada (Tahap 3). Tidak dikerjakan di TASK-02.
+19. **Riwayat mock dan live bisa bercampur** (known gap 3 rencana), terutama di demo laptop 4 Nov. Mulai demo dari DB kosong, atau badge `SUMBER_SIMULASI` wajib ada di TASK-03 (frontend). Belum ada filter `simulated` di `GET /checks`. Cache mock dan live sudah dipisah (Tahap 3), tetapi tabel `ip_checks` tidak.
+20. **Data cache kedaluwarsa tidak ditampilkan** (known gap 4 rencana), termasuk saat sumber gagal; analis hanya melihat cek lama di riwayat.
+21. **Syarat non-komersial VirusTotal** (known gap 5 rencana). Akun gratis dilarang untuk business workflow atau produk komersial. Konfirmasi ke dosen sebelum soc-ir dipakai sebagai SOC operasional.
+22. **Bobot, koefisien, ambang label, dan TTL cache masih "percobaan"** (`scoring_version: v1-percobaan`; TTL 6/24/1 jam). Tidak diubah tanpa keputusan tim (CLAUDE.md). Bukti pembulatan (gap 10) bergantung pada bobot 30/25; test-nya harus ikut ditinjau bila rumus berubah.
