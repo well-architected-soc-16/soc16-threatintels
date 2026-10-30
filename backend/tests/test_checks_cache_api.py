@@ -285,3 +285,27 @@ def test_10_post_checks_paralel_tidak_menembus_batas_4_per_menit_vt(
     assert {b["assessment_status"] for b in skipped} == {"DATA_TERBATAS"}
     assert len(vt_seen) == 4  # request keluar ke VirusTotal tepat 4
     assert len(abuse_seen) == 10  # AbuseIPDB tidak terbatasi kuota VirusTotal
+
+
+# --- cache.store gagal: cek tetap lengkap ---------------------------------------------------------------------------
+
+
+def test_cache_store_gagal_cek_tetap_lengkap_dan_tidak_dari_cache(
+    client, make_user, login, monkeypatch
+):
+    def broken_store(*args, **kwargs):
+        raise RuntimeError("berisi-rahasia")
+
+    monkeypatch.setattr(cache, "store", broken_store)
+    make_user("analyst", Role.ANALYST)
+
+    resp = post(client, login, "1.1.1.1")
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert (body["assessment_status"], body["coverage"]) == ("COMPLETE", "2/2")
+    assert body["risk_score"] == 85.5  # hasil sumber tidak dibuang
+    for source in body["sources"]:
+        assert source["status"] == "OK_SIGNAL"
+        assert source["from_cache"] is False and source["expires_at"] is None
+    assert "berisi-rahasia" not in resp.text

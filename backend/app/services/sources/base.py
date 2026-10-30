@@ -13,6 +13,16 @@ from datetime import datetime
 from typing import Any, Literal, Protocol
 
 
+class InputRejectedError(ValueError):
+    """Input yang seharusnya sudah ditolak validasi (`validate_ip`) sampai ke adapter.
+
+    HANYA dilempar oleh `require_public_ip`. Ini bug pemanggil, bukan kegagalan satu sumber, jadi
+    hanya exception inilah yang dilempar keras oleh `collect_sources`; exception lain (termasuk
+    turunan `ValueError` seperti `JSONDecodeError`) diisolasi per sumber. Tetap turunan `ValueError`
+    agar pemanggil lama yang menangkap `ValueError` tidak berubah.
+    """
+
+
 class SourceStatus(enum.StrEnum):
     OK_SIGNAL = "OK_SIGNAL"
     OK_NO_SIGNAL = "OK_NO_SIGNAL"

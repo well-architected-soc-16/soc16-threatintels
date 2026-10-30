@@ -14,6 +14,7 @@ from app.services import scoring
 from app.services.sources._common import error_result, utc_now
 from app.services.sources.base import (
     SCORED_STATUSES,
+    InputRejectedError,
     ReputationSource,
     SourceReason,
     SourceResult,
@@ -43,14 +44,16 @@ def collect_sources(ip: str, sources: Sequence[ReputationSource]) -> list[Source
     traceback (pesan bisa memuat data sensitif). Hasil itu tidak masuk cache (ia dibuat di luar
     gerbang) dan reservasi kuota yang sudah dibuat tetap dihitung.
 
-    `ValueError` sengaja tetap dilempar keras: ia berarti input yang ditolak lolos ke adapter
-    (`require_public_ip`), bukan kegagalan satu sumber.
+    Hanya `InputRejectedError` yang tetap dilempar keras: ia berarti input yang ditolak lolos ke
+    adapter (`require_public_ip`), bukan kegagalan satu sumber. Turunan `ValueError` lain
+    (`JSONDecodeError`, `UnicodeDecodeError`, `ValidationError`, ...) adalah bug biasa dan
+    diisolasi seperti exception lain.
     """
     results: list[SourceResult] = []
     for source in sources:
         try:
             results.append(source.fetch(ip))
-        except ValueError:
+        except InputRejectedError:
             raise
         except Exception as exc:  # noqa: BLE001
             logger.error(

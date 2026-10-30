@@ -4,6 +4,7 @@ Memakai database test sungguhan (advisory lock, UNIQUE, dan transaksi tidak bisa
 sumber palsu yang mencatat pemanggilan, dan jam palsu yang bisa dimajukan.
 """
 
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -675,3 +676,58 @@ def test_lock_per_sumber_tidak_saling_memblokir(engine):
     )
 
     assert held == {"abuseipdb": True}
+
+
+# --- cache.store gagal setelah request live sukses -------------------------------------------------------------
+
+
+def test_cache_store_gagal_hasil_live_tetap_dikembalikan_tanpa_cache(
+    engine, monkeypatch, caplog
+):
+    from app.services.sources import cache as cache_module
+
+    secret = "berisi-rahasia"
+
+    def broken_store(*args, **kwargs):
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(cache_module, "store", broken_store)
+    caplog.set_level(logging.DEBUG)
+    clock = Clock()
+    vt = FakeSource(V, clock=clock)
+    gateway = make_gateway(vt, engine, clock=clock)
+
+    first = gateway.fetch("8.8.8.8")
+    second = gateway.fetch("8.8.8.8")
+
+    # Hasil live tidak dibuang: status, skor, dan bukti utuh; hanya tanpa cache.
+    assert (first.status, first.normalized_score) == (SourceStatus.OK_SIGNAL, 50)
+    assert first.from_cache is False and first.expires_at is None
+    assert first.evidence_summary == {"k": 1} and first.http_status == 200
+    # Tidak ada cache, jadi pengambilan kedua kembali memanggil adapter.
+    assert second.from_cache is False and len(vt.calls) == 2
+    assert count(engine, SourceCache) == 0
+    # Kuota tetap terhitung: barisnya sudah diselesaikan sebelum penyimpanan cache.
+    rows = calls_in(engine)
+    assert [r.result_status for r in rows] == ["OK_SIGNAL", "OK_SIGNAL"]
+    # Log ERROR: nama sumber dan nama kelas saja, tanpa pesan dan tanpa traceback.
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(errors) == 2
+    assert all(V in r.getMessage() and "RuntimeError" in r.getMessage() for r in errors)
+    assert all(r.exc_info is None for r in errors)
+    assert secret not in caplog.text and "Traceback" not in caplog.text
+
+
+def test_cache_store_gagal_tidak_membuat_kuota_gratis(engine, monkeypatch):
+    from app.services.sources import cache as cache_module
+
+    def broken_store(*args, **kwargs):
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(cache_module, "store", broken_store)
+    clock = Clock()
+    gateway = make_gateway(FakeSource(V, clock=clock), engine, clock=clock)
+
+    statuses = [gateway.fetch(ip).status for ip in IPS[:5]]
+
+    assert statuses == [SourceStatus.OK_SIGNAL] * 4 + [SourceStatus.SKIPPED]

@@ -17,7 +17,12 @@ from typing import Any
 import httpx
 
 from app.services.ip_validation import validate_ip
-from app.services.sources.base import SourceReason, SourceResult, SourceStatus
+from app.services.sources.base import (
+    InputRejectedError,
+    SourceReason,
+    SourceResult,
+    SourceStatus,
+)
 
 # Memetakan body 200 (atau 404) ke hasil; None dari map_not_found berarti "bukan 404 yang dikenal".
 BodyMapper = Callable[[object, datetime], SourceResult]
@@ -32,14 +37,14 @@ def utc_now() -> datetime:
 
 
 def require_public_ip(ip: str) -> str:
-    """Kembalikan IP kanonik, atau lempar ValueError tanpa membuat request.
+    """Kembalikan IP kanonik, atau lempar `InputRejectedError` tanpa membuat request.
 
     Pemanggil seharusnya sudah memvalidasi; ini pengaman terakhir karena VirusTotal
     menaruh IP di path URL.
     """
     result = validate_ip(ip)
     if not result.valid or result.ip is None:
-        raise ValueError(
+        raise InputRejectedError(
             "adapter sumber hanya boleh dipanggil dengan IPv4 publik yang valid"
         )
     return result.ip

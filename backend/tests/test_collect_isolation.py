@@ -10,13 +10,19 @@ import json
 import logging
 
 import pytest
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.main import app
 from app.models import AuditLog, Role, SourceCache, SourceCall
 from app.services import ip_checks
-from app.services.sources.base import SourceReason, SourceStatus
+from app.services.sources.base import (
+    InputRejectedError,
+    SourceReason,
+    SourceResult,
+    SourceStatus,
+)
 from app.services.sources.factory import get_sources
 from app.services.sources.mock import MockSource
 from app.services.sources.quota import QuotaPolicy
@@ -105,23 +111,68 @@ def test_semua_sumber_crash_tidak_tersedia_bukan_skor_nol():
     assert assessment.risk_score is None
 
 
+def validation_error() -> ValidationError:
+    class Model(BaseModel):
+        x: int
+
+    try:
+        Model(x="bukan-angka")
+    except ValidationError as exc:
+        return exc
+    raise AssertionError("ValidationError tidak muncul")
+
+
 @pytest.mark.parametrize(
     "exc",
     [
         ValueError("x"),
         json.JSONDecodeError("m", "d", 0),
         UnicodeDecodeError("utf-8", b"", 0, 1, "m"),
+        validation_error(),
     ],
+    ids=["ValueError", "JSONDecodeError", "UnicodeDecodeError", "ValidationError"],
 )
-def test_value_error_dan_turunannya_tetap_dilempar_keras(exc):
-    with pytest.raises(ValueError):
-        ip_checks.collect_sources("8.8.8.8", [raising(A, exc), MockSource(V)])
+def test_turunan_value_error_biasa_diisolasi_sumber_lain_tetap_tampil(exc):
+    # Gap 12: hanya InputRejectedError yang keras. Turunan ValueError lain adalah bug biasa.
+    assert isinstance(exc, ValueError)
+
+    broken, healthy = ip_checks.collect_sources(
+        "1.1.1.1", [raising(A, exc), MockSource(V)]
+    )
+
+    assert (broken.status, broken.reason) == (
+        SourceStatus.ERROR,
+        SourceReason.INTERNAL_ERROR,
+    )
+    assert healthy.status is SourceStatus.OK_SIGNAL  # sumber lain tetap tampil
+
+
+def test_input_rejected_error_dilempar_keras():
+    with pytest.raises(InputRejectedError):
+        ip_checks.collect_sources(
+            "8.8.8.8", [raising(A, InputRejectedError("x")), MockSource(V)]
+        )
 
 
 def test_ip_ditolak_yang_lolos_ke_adapter_gagal_keras_bukan_internal_error():
-    # Jalur nyata: require_public_ip di dalam adapter melempar ValueError untuk IP privat.
-    with pytest.raises(ValueError):
+    # Jalur nyata: require_public_ip di dalam adapter melempar InputRejectedError untuk IP privat.
+    with pytest.raises(InputRejectedError):
         ip_checks.collect_sources("10.0.0.1", [MockSource(A), MockSource(V)])
+
+
+def test_input_rejected_error_hanya_dari_require_public_ip():
+    from app.services.sources._common import require_public_ip
+
+    with pytest.raises(InputRejectedError):
+        require_public_ip("10.0.0.1")
+    assert issubclass(InputRejectedError, ValueError)  # pemanggil lama tak berubah
+    # Kegagalan validasi lain yang juga ValueError BUKAN InputRejectedError.
+    with pytest.raises(ValueError) as unknown:
+        MockSource("otx")
+    assert not isinstance(unknown.value, InputRejectedError)
+    with pytest.raises(ValueError) as bad_result:
+        SourceResult(source=A, status=SourceStatus.ERROR)
+    assert not isinstance(bad_result.value, InputRejectedError)
 
 
 def test_urutan_hasil_tetap_walau_sumber_pertama_crash():
@@ -204,13 +255,13 @@ def test_api_satu_sumber_crash_cek_tetap_tersimpan_data_terbatas(
     assert SECRET not in json.dumps(audit.detail)
 
 
-def test_api_value_error_dari_adapter_menggagalkan_keras(
+def test_api_input_rejected_error_dari_adapter_menggagalkan_keras(
     client, make_user, login, use_sources, db
 ):
     make_user("analyst", Role.ANALYST)
-    use_sources([raising(A, ValueError("input ditolak lolos")), MockSource(V)])
+    use_sources([raising(A, InputRejectedError("input ditolak lolos")), MockSource(V)])
 
-    with pytest.raises(ValueError):
+    with pytest.raises(InputRejectedError):
         post(client, login, "1.1.1.1")
 
     db.expire_all()
@@ -222,3 +273,19 @@ def test_api_value_error_dari_adapter_menggagalkan_keras(
         )
         == 0
     )
+
+
+def test_api_json_decode_error_di_satu_sumber_cek_tetap_tersimpan(
+    client, make_user, login, use_sources
+):
+    # Turunan ValueError (bug parsing) tidak boleh menjadi 500; sumber lain tetap tampil.
+    make_user("analyst", Role.ANALYST)
+    use_sources([raising(A, json.JSONDecodeError("m", "d", 0)), MockSource(V)])
+
+    resp = post(client, login, "1.1.1.1")
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["sources"][0]["reason"] == "INTERNAL_ERROR"
+    assert body["sources"][1]["status"] == "OK_SIGNAL"
+    assert (body["assessment_status"], body["coverage"]) == ("DATA_TERBATAS", "1/2")

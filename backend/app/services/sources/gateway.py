@@ -9,6 +9,7 @@ miss -> reservasi kuota (commit, lock dilepas) -> request di luar lock -> selesa
 simpan ke cache bila statusnya boleh di-cache.
 """
 
+import logging
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
@@ -24,6 +25,8 @@ from app.services.sources.base import (
     SourceResult,
     SourceStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SourceGateway:
@@ -91,14 +94,23 @@ class SourceGateway:
         if ttl is None:
             return result
         expires_at = self._clock() + ttl
-        with Session(self._engine) as session, session.begin():
-            cache.store(
-                session,
-                result,
-                ip=ip,
-                params_key=self._params_key,
-                mode=self._mode,
-                expires_at=expires_at,
-                fallback_retrieved_at=now,
+        try:
+            with Session(self._engine) as session, session.begin():
+                cache.store(
+                    session,
+                    result,
+                    ip=ip,
+                    params_key=self._params_key,
+                    mode=self._mode,
+                    expires_at=expires_at,
+                    fallback_retrieved_at=now,
+                )
+        except Exception as exc:  # noqa: BLE001
+            # Request live sudah berhasil dan kuotanya sudah terpakai: jangan buang hasilnya hanya
+            # karena cache gagal ditulis. Kembalikan apa adanya, tanpa cache (`expires_at` null).
+            # Log hanya nama sumber dan kelas exception (pesan bisa memuat data sensitif).
+            logger.error(
+                "gagal menyimpan cache sumber %s: %s", self.name, type(exc).__name__
             )
+            return result
         return replace(result, expires_at=expires_at)
