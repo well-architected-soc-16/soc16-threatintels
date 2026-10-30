@@ -9,11 +9,11 @@ Diperbarui: 2026-10-31. Rujukan: [`TASK-02-sumber-reputasi-skor.md`](TASK-02-sum
 | Rencana | Rencana TASK-02 dan keputusan grilling (Keputusan 7-14) | #19, #21 | Selesai, ter-merge |
 | 0 | Konfigurasi sumber + API key sebagai secret | #22 | Selesai, ter-merge |
 | 1 | Adapter AbuseIPDB + VirusTotal, pemetaan status | #23 | Selesai, ter-merge |
-| 2 | Skor, label, flag, kontrak respons | (belum dibuka) | Selesai di lokal, menunggu "push" dari developer |
-| 3 | Cache + pembatas kuota bersama | - | Belum |
+| 2 | Skor, label, flag, kontrak respons | #24 | Selesai, ter-merge |
+| 3 | Cache + pembatas kuota bersama | (belum dibuka) | Selesai di lokal, menunggu "push" dari developer |
 | 4 | Uji API nyata + rapikan | - | Belum |
 
-Hasil terakhir (Tahap 2): `pytest` **645 passed**, `ruff check` dan `ruff format --check` bersih, `docker compose ps` `db` dan `api` `healthy`.
+Hasil terakhir (Tahap 3): `pytest` **732 passed**, `ruff check` dan `ruff format --check` bersih, `docker compose ps` `db` dan `api` `healthy`.
 
 ## Tahap 0
 
@@ -148,9 +148,68 @@ Kode:
 - `test_checks_scoring_api.py`: kontrak respons per IP demo, GET sama dengan POST, presisi penuh di DB, label dari nilai tersimpan lewat API, cek lama tiga-field, data nyata dengan waktu WIB, kegagalan sumber (401, 429 dengan `Retry-After`, timeout), audit tanpa evidence/key, key tidak bocor, input ditolak dan viewer tidak memanggil sumber, OpenAPI.
 - `test_iocs_simulasi.py`: guard MISP end-to-end dan kontrol positif.
 
-## Catatan untuk Tahap 3
+## Tahap 3
 
-Ditambahkan di akhir Tahap 2 (dari known gap 9), bagian dari rencana Tahap 3:
+Dikerjakan di branch `feat/task-02-tahap-3-cache-kuota`. Guard `SOURCES_MODE=live` dicabut; mode live kini memakai adapter asli lewat cache dan pembatas kuota. **Belum pernah dijalankan terhadap API nyata** (itu Tahap 4); semua pengujian memakai `MockTransport`.
+
+Kode:
+- Migrasi `0004`: tabel `source_cache` dan `source_calls`; model `SourceCache`, `SourceCall`.
+- `services/sources/cache.py`: `CacheTtl`, `lookup`, `store` (upsert). `services/sources/quota.py`: `QuotaPolicy`, `reserve`, `finalize`, `daily_window_start`. `services/sources/gateway.py`: `SourceGateway` (memenuhi Protocol `ReputationSource`).
+- `services/sources/factory.py`: dipisah menjadi `build_sources()` (murni: adapter mock atau live) dan `get_sources(db)` (dependency; membungkus tiap adapter dengan `SourceGateway`). Klien HTTP live satu instance bersama (`get_http_client`), ditutup di lifespan aplikasi (`main.py`).
+- `core/config.py`: validator guard live dicabut (validasi file key tetap).
+- `ip_checks.collect_sources`: isolasi per sumber (lihat keputusan 10).
+- `_common.py`/`base.py`: header `X-RateLimit-Reset` dan `X-RateLimit-Remaining` dibaca ke `SourceResult` (tidak ditampilkan di API dan tidak masuk `ip_checks.sources`).
+
+Alur satu sumber di `SourceGateway.fetch`: cache hit → kembalikan (tanpa baris `source_calls`, tanpa kuota) · miss → reservasi kuota dalam transaksi sendiri dengan `pg_advisory_xact_lock` per sumber, lalu commit (lock dilepas) · request di luar lock · selesaikan baris · simpan ke cache bila statusnya boleh.
+
+### Keputusan dan penyimpangan dari rencana
+
+1. **`source_cache` punya kolom `flags` (JSONB), tidak ada di rencana.** Tanpa itu, hasil mock kedua kali untuk IP yang sama kembali tanpa `SUMBER_SIMULASI` dan lolos dari guard MISP; hasil VirusTotal dari cache juga kehilangan `NO_VENDOR_OPINION`. Dites ujung ke ujung (POST dua kali, lalu `POST /iocs/misp` → 422).
+2. **`source_calls` punya kolom `rate_limit_reset` dan `rate_limit_remaining`, tidak ada di rencana.** Dibutuhkan agar reset harian AbuseIPDB bisa mengikuti `X-RateLimit-Reset` dari respons terakhir (Keputusan 11) dan agar sisa kuota tercatat sebagai bukti. Keduanya juga sudah ada di `SourceResult` untuk dipakai smoke test Tahap 4. Indeks `ix_source_calls_lookup (source, mode, called_at)` ditambahkan untuk hitungan kuota.
+3. **Cache juga dipakai pada mode mock** (baris `mode = 'mock'`), karena itu satu-satunya cara membuktikan bahwa mode live tidak membaca baris simulasi. Konsekuensinya: cek IP yang sama pada mode mock kini `from_cache: true` pada kali kedua. Panggilan mock tetap dicatat di `source_calls` tetapi tidak pernah dihitung limiter.
+4. **Cache dan kuota memakai sesi database sendiri** (`Session(db.get_bind())`), bukan sesi request, karena reservasi harus di-commit sebelum request keluar agar lock dilepas. `get_sources` hanya menyimpan referensi engine; tidak ada query sampai `fetch` (dipenuhi syarat "Catatan untuk Tahap 3" dari Tahap 2).
+5. **Satu jam untuk semua keputusan waktu di gerbang.** `called_at`, jendela kuota, cek kedaluwarsa, dan `expires_at` memakai jam gerbang; jam adapter hanya menentukan `retrieved_at`. `expires_at = jam gerbang setelah request + TTL`, dan baris dianggap kedaluwarsa tepat pada `expires_at` (`expires_at > now` untuk valid).
+6. **Hitungan kuota mencakup semua baris live**, termasuk request yang gagal (AUTH, TIMEOUT, 429) dan reservasi yang tak pernah selesai (`result_status` NULL, mis. adapter melempar exception). Sengaja konservatif: lebih baik menolak terlalu dini daripada menembus kuota akun.
+7. **Cooldown 429** dihitung dari `called_at` baris 429 terbaru bermode live + `Retry-After` (60 detik bila tidak ada atau bukan angka). `called_at` adalah waktu reservasi, bukan waktu respons, jadi cooldown sedikit lebih pendek dari yang dikirim server sebesar durasi request. 429 dari panggilan mock tidak memicu cooldown live.
+8. **Jendela harian** = `anchor + 24 jam × floor((sekarang − anchor) / 24 jam)`. `anchor` adalah `X-RateLimit-Reset` terbaru (AbuseIPDB, boleh di masa lalu atau depan) atau 00:00 UTC hari ini. VirusTotal selalu 00:00 UTC. Jendela geser 60 detik dipakai untuk 4 per menit VirusTotal (bukan menit kalender), jadi lebih ketat daripada batas kalender.
+9. **Hasil `SKIPPED/QUOTA_INTERNAL` tidak dicatat di `source_calls` dan tidak di-cache** (bukan request keluar). Cache hit pun tidak menulis baris panggilan dan tidak memakai kuota. Hasil dari cache punya `http_status` dan `duration_ms` null (tidak ada request pada pembacaan itu).
+10. **Isolasi per sumber (keputusan developer atas known gap 11).** `collect_sources` menangkap `Exception` per sumber: hasilnya `ERROR` + reason baru **`INTERNAL_ERROR`**, sumber lain tetap tampil. Log level ERROR hanya memuat nama sumber dan nama kelas exception (tanpa pesan, tanpa traceback). `ValueError` tetap dilempar keras (input yang ditolak lolos ke adapter). Hasil itu dibuat di luar gerbang sehingga tidak masuk cache, dan reservasi kuota yang sudah dibuat tetap dihitung.
+    - **Penyimpangan dari kosakata Bab 3:** `INTERNAL_ERROR` tidak ada di Bab 3. Dipilih bukan `UPSTREAM` karena `UPSTREAM` di Bab 3 berarti layanan luar gagal, sedangkan ini bug di sisi kita; mencampurnya membuat analis salah menyalahkan AbuseIPDB atau VirusTotal. Perlu dimasukkan ke dokumen tim bila vocabulary reason dibakukan.
+11. **Kegagalan database di dalam gerbang ikut terisolasi** karena memakai mekanisme yang sama: kegagalan cache atau kuota (mis. tabel belum termigrasi) menjadi `INTERNAL_ERROR` untuk sumber itu, tercatat di log sebagai nama kelas, dan cek tetap tersimpan bila tabel `ip_checks` sehat.
+12. **Klien HTTP live**: satu `httpx.Client` bersama, verifikasi TLS bawaan (tidak dimatikan), redirect tidak diikuti, ditutup di lifespan. Key dibaca dari file setiap kali `get_sources` dijalankan pada mode live (bukan di-cache).
+13. **Test yang berubah perilakunya (bukan dilemahkan):** `test_hasil_per_sumber_membawa_field_tahap_1` kini mengharuskan `expires_at` terisi (hasil mock kini di-cache, OK_SIGNAL 6 jam); dua test `test_sources_config` yang menuntut live ditolak dibalik menjadi "diterima" dan "start normal, key tidak bocor"; `test_scoring` memakai `build_sources()` alih-alih `get_sources()`.
+
+### Cek selesai (rencana Tahap 3)
+
+- IP sama dua kali → `from_cache: true`, adapter tidak dipanggil, `retrieved_at` sama: `test_source_gateway.py`, `test_checks_cache_api.py` (lewat API, dihitung request di `MockTransport`).
+- Cache kedaluwarsa → diambil ulang; `ERROR`/`INSUFFICIENT_DATA`/`SKIPPED` tidak pernah keluar dari atau masuk ke cache (juga dijaga CHECK constraint DB). TTL per status dites satu detik sebelum dan tepat di batas.
+- 5 cek IP berbeda dalam 1 menit → cek ke-5 VT `SKIPPED/QUOTA_INTERNAL`, AbuseIPDB tetap jalan, `DATA_TERBATAS` 1/2 (lewat API dan lewat gerbang).
+- 10 request paralel (thread dengan `Barrier`) → tepat 4 lolos dan 6 `SKIPPED`; lock tidak ditahan selama request (dites dengan `pg_try_advisory_lock` dari koneksi lain di dalam `fetch` adapter).
+- Setelah 429 + `Retry-After` (120 detik, dan tanpa header = 60 detik) sumber itu di-skip sampai cooldown habis; tidak ada retry pada request yang sama; sumber lain tidak ikut.
+- Cache `mock` tidak dibaca mode live (dan sebaliknya); panggilan mock > 4 per menit tidak pernah `SKIPPED` dan tidak mengurangi kuota live.
+- Reset harian AbuseIPDB mengikuti `X-RateLimit-Reset` (diuji dengan reset 06:00 UTC, bukan tengah malam, supaya header yang diabaikan terdeteksi); tanpa header, 00:00 UTC. Rumus jendela diuji sendiri.
+- Input yang ditolak (8 jenis), viewer (403), dan tanpa token (401): nol baca cache, nol tulis cache, nol hitungan kuota (spy pada `cache.lookup/store` dan `quota.reserve/finalize`, plus tabel kosong); membangun `get_sources(db)` juga nol. Ada test kontrol yang membuktikan spy mendeteksi akses pada IP valid.
+- **Uji start kontainer mode live** (`docker compose run --rm --no-deps`, key palsu ditulis di `/tmp` kontainer sekali pakai; `secrets/` tidak disentuh, tidak ada `POST /checks`): file key hilang, kosong, dan placeholder → gagal start (exit 1), pesan hanya menyebut `SOURCES_MODE`, `ABUSEIPDB_API_KEY_FILE`/`VIRUSTOTAL_API_KEY_FILE` dan alasannya; dua file key palsu yang valid → start normal (`sources_mode=live`), `/health` 200 `db: ok`. Key palsu tidak muncul di keluaran mana pun (0 kecocokan).
+
+### Hasil gerbang
+
+- `docker compose up -d --build`: `db` dan `api` `healthy` (migrasi `0004` berjalan otomatis di entrypoint); `/health` OK.
+- `pytest -q -p no:cacheprovider`: **732 passed** (Tahap 2: 645; 87 test baru), 1 warning (known gap 4).
+- `ruff check --no-cache .`: bersih. `ruff format --no-cache --check .`: 83 file sudah terformat.
+- Migrasi: upgrade dari DB kosong, roundtrip per revisi, dan `alembic check` (tanpa drift) lulus untuk `0004`.
+- Uji mutasi manual (salinan di luar repo, tidak di-commit), masing-masing menggagalkan minimal 1 test: lock dihapus (test paralel gagal 8 dari 8 percobaan; lulus 8 dari 8 tanpa mutasi), mode live tidak difilter di hitungan kuota, cache mengabaikan mode, ERROR ikut di-cache, cache hit memperbarui `retrieved_at`, flag tidak disimpan, cooldown dihapus, header reset diabaikan, batas harian dihapus, batas menit dihapus, request dijalankan di bawah lock, cache dilewati, `except` per sumber dihapus, `ValueError` ikut diisolasi, `INTERNAL_ERROR` diganti `UPSTREAM`, log memuat pesan exception, dan akses cache dipindah ke dependency `get_sources`.
+- `git status --porcelain`: tidak ada `.env` atau `secrets/`. Pencarian pola rahasia pada diff hanya menemukan nama variabel dan key uji palsu.
+
+### Test baru
+
+- `test_source_gateway.py` (36): cache, TTL, kuota menit/harian, cooldown, mode, paralel, lock, isi `source_calls`.
+- `test_checks_cache_api.py`: cache dan kuota lewat API, flag simulasi dari cache, nol akses untuk input ditolak/viewer.
+- `test_collect_isolation.py`: isolasi `INTERNAL_ERROR`, log tanpa pesan, `ValueError` keras, reservasi tetap dihitung.
+- `test_sources_factory.py`, `test_source_tables.py`, tambahan di `test_sources_abuseipdb.py` (header rate-limit), `test_sources_base.py`, `test_migrations.py`, `test_sources_config.py`.
+
+## Catatan untuk Tahap 3 (dipenuhi di Tahap 3)
+
+Ditambahkan di akhir Tahap 2 (dari known gap 9) sebagai syarat Tahap 3. **Semuanya dipenuhi di Tahap 3**: butir 1 oleh desain `SourceGateway`/`get_sources`, butir 2 oleh `test_checks_cache_api.py` (spy, tabel kosong, kontrol, uji mutasi "akses cache dipindah ke dependency" menggagalkan 9 test), butir 3 oleh keputusan Tahap 3 nomor 10.
 
 1. **Cache dan pembatas kuota hanya boleh dipanggil setelah `validate_ip` lolos, di dalam alur `collect_sources`; bukan di dependency FastAPI** (`get_sources` atau dependency baru). Dependency berjalan sebelum body diperiksa, jadi input yang ditolak (dan viewer yang akan mendapat 403) bisa mengakses cache atau menghabiskan kuota. Ini melanggar aturan CLAUDE.md: input yang ditolak tidak boleh memicu request keluar, akses cache, atau kuota. `get_sources` cukup membangun objek tanpa efek samping (tanpa request, tanpa baca/tulis cache, tanpa kuota).
 2. **Test yang wajib ditulis di Tahap 3** (cache dan limiter belum ada, jadi belum bisa ditulis sekarang): untuk setiap input yang ditolak (`PRIVATE`, `LOOPBACK`, `INVALID_FORMAT`, `IPV6_NOT_SUPPORTED`, dst.) dan untuk viewer (403), pakai spy pada cache dan limiter lalu pastikan **nol** pembacaan cache, **nol** penulisan cache, dan **nol** hitungan kuota; ditambah satu test bahwa membangun `get_sources()` tidak menyentuh keduanya. Lakukan uji mutasi: memindahkan akses cache/limiter ke dependency harus membuat test ini gagal. Pola yang sudah ada dan bisa ditiru: `test_input_ditolak_tidak_memanggil_sumber_yang_disuntikkan` dan `test_viewer_tidak_memanggil_sumber`.
@@ -166,7 +225,12 @@ Ditambahkan di akhir Tahap 2 (dari known gap 9), bagian dari rencana Tahap 3:
 5. ~~Pemetaan Tahap 1 belum dicocokkan dengan Bab 3 dokumen riset~~ **Selesai**: dicocokkan dengan Bab 3 oleh developer, 31 Okt; satu koreksi (`reason` SKIPPED, lihat keputusan 5). PDF riset tidak ditambahkan ke repo.
 6. ~~Test `assess()` untuk status non-`OK_*` belum ada~~ **Selesai di Tahap 2**: `test_scoring.py` menguji bahwa `NO_RECORD`, `INSUFFICIENT_DATA`, `ERROR`, dan `SKIPPED` tidak menambah cakupan (Keputusan 6 rencana).
 7. ~~Belum ada pemakai `SourceResult` di luar test~~ **Selesai di Tahap 2**: `ip_checks.to_stored` (JSON, waktu UTC) dan skema respons `SourceResult` (waktu WIB).
-8. **Mode mock membuat semua cek baru ber-flag `SUMBER_SIMULASI` sehingga tidak ada cek yang bisa dikirim ke MISP lewat alur normal** sampai sumber live aktif (Tahap 3). Itu disengaja (Keputusan 10), tetapi demo MISP 4 Nov harus memakai cek bertanda data nyata atau menunggu Tahap 3. Test memakai adapter live di atas `MockTransport` untuk membuktikan cek tanpa flag tetap bisa dikirim.
-9. **`get_sources` dijalankan sebagai dependency sebelum body `POST /checks` diperiksa.** Pada mode mock itu hanya membuat objek, tanpa jaringan. Aturan untuk Tahap 3 ada di bagian "Catatan untuk Tahap 3": cache dan pembatas kuota tidak boleh disentuh di dependency.
+8. **Mode mock membuat semua cek baru ber-flag `SUMBER_SIMULASI` sehingga tidak ada cek yang bisa dikirim ke MISP lewat alur normal** sampai sumber live aktif (Tahap 3). Itu disengaja (Keputusan 10), tetapi demo MISP 4 Nov harus memakai cek bertanda data nyata atau menunggu Tahap 3. Test memakai adapter live di atas `MockTransport` untuk membuktikan cek tanpa flag tetap bisa dikirim. **Pembaruan Tahap 3:** mode live kini ada, jadi cek tanpa simulasi bisa terjadi, tetapi belum pernah diuji dengan API nyata (Tahap 4). Untuk demo 4 Nov, tanpa Tahap 4 pengiriman ke MISP hanya bisa ditunjukkan sebagai penolakan 422 atas hasil simulasi.
+9. ~~`get_sources` dijalankan sebagai dependency sebelum body `POST /checks` diperiksa~~ **Selesai di Tahap 3**: `get_sources` hanya menyimpan referensi engine; cache dan kuota hanya disentuh di `SourceGateway.fetch` setelah `validate_ip` lolos, dibuktikan spy dan uji mutasi (lihat "Catatan untuk Tahap 3").
 10. ~~Pembulatan memakai `round()` Python dan titik tengah bisa dibulatkan ke arah yang tidak terduga~~ **Ditutup dengan bukti (Tahap 2)**: `(30A + 25V) / 55 = (6A + 5V) / 11`, jadi skor selalu kelipatan 1/11 dan seri di titik tengah 1 desimal (`x.x5`) mustahil (`20(6A + 5V) = 22k + 11`: genap vs ganjil). `test_skor_kelipatan_sepelas_jadi_tidak_ada_seri_pembulatan_dan_label_stabil` memeriksa seluruh 101×101 pasangan A,V dan juga bahwa label dari nilai asli sama dengan label dari nilai yang dibulatkan. Akibatnya kasus 74,96 (tampil `75.0`, label `TINGGI`) adalah **pengaman desain** (label dari nilai tersimpan) yang tidak terjadi dari input nyata dengan rumus ini. Bukti ini gugur bila bobot atau jumlah sumber berubah (mutasi bobot 30→31 menggagalkan test), jadi test itu harus ikut ditinjau saat tim mengubah rumus.
-11. **Tanpa `except` di `collect_sources`, bug di satu adapter membuat seluruh `POST /checks` menjadi 500**, padahal Bab 5 menyatakan hasil sumber lain tetap ditampilkan. Ini kompromi sadar di Tahap 2 (keputusan 5): adapter sudah mengubah semua kegagalan httpx menjadi `ERROR`, dan `ValueError` dari `require_public_ip` berarti input yang ditolak lolos ke adapter sehingga harus gagal keras. Tetapi exception lain (bug parsing, `KeyError`, dll.) ikut membatalkan cek, dan tidak ada baris cek maupun audit yang tersimpan. **Tinjau ulang sebelum mode live**: opsi yang perlu diputuskan adalah menangkap exception per sumber (kecuali kelas yang menandai input tidak valid), mencatat hanya nama kelasnya di log, menyimpan sumber itu sebagai `ERROR` + `UPSTREAM`, dan membiarkan sumber lain tetap tampil.
+11. ~~Tanpa `except` di `collect_sources`, bug di satu adapter membuat seluruh cek menjadi 500~~ **Selesai di Tahap 3** atas keputusan developer: isolasi per sumber dengan reason `INTERNAL_ERROR` (Tahap 3 keputusan 10). Sisa celahnya ada di gap 12.
+12. **`ValueError` dan turunannya tidak diisolasi oleh `collect_sources`** (sesuai syarat developer: `ValueError` tetap keras). Akibatnya bug di adapter yang kebetulan melempar turunan `ValueError` (mis. `json.JSONDecodeError`, `UnicodeDecodeError`, `pydantic.ValidationError`) tetap membuat seluruh `POST /checks` menjadi 500. Adapter saat ini sudah menangkap kegagalan parse JSON sendiri, jadi risikonya kecil, tetapi bila ingin isolasi penuh, `require_public_ip` perlu melempar subclass khusus dan hanya itu yang dilempar keras. Perlu keputusan sebelum menambah sumber baru.
+13. **Tabel `source_cache` dan `source_calls` tumbuh tanpa batas** (tidak ada retensi atau pembersihan; baris cache kedaluwarsa tetap ada sampai ditimpa upsert). Pada skala tim kecil dan kuota 1.000 per hari ini tidak mendesak, tetapi belum ada kebijakan retensi.
+14. **Tanpa single-flight** (known gap 1 rencana): dua cek IP yang sama hampir bersamaan sama-sama meleset cache dan sama-sama memakai kuota. Limiter tetap menjamin batas tidak terlewati.
+15. **Mode live belum pernah dijalankan terhadap API nyata.** Format sebenarnya `X-RateLimit-Reset`, perilaku `Retry-After`, dan kuota riil baru terbukti di Tahap 4. `Retry-After` berbentuk tanggal HTTP diabaikan (cooldown 60 detik).
+16. **Jendela VirusTotal 4 per menit dihitung geser 60 detik**, bukan menit kalender seperti di server VirusTotal; lebih ketat, jadi tidak pernah melebihi batas, tetapi bisa menolak permintaan yang masih sah di sisi server.
