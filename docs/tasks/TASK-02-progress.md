@@ -13,7 +13,7 @@ Diperbarui: 2026-10-31. Rujukan: [`TASK-02-sumber-reputasi-skor.md`](TASK-02-sum
 | 3 | Cache + pembatas kuota bersama | - | Belum |
 | 4 | Uji API nyata + rapikan | - | Belum |
 
-Hasil terakhir (Tahap 1): `pytest` **492 passed**, `ruff check` dan `ruff format --check` bersih, `docker compose ps` `db` dan `api` `healthy`.
+Hasil terakhir (Tahap 1): `pytest` **533 passed**, `ruff check` dan `ruff format --check` bersih, `docker compose ps` `db` dan `api` `healthy`.
 
 ## Tahap 0
 
@@ -61,15 +61,17 @@ Modul baru di `backend/app/services/sources/`:
 - `abuseipdb.py`, `virustotal.py`: adapter live (`httpx.Client` disuntikkan) dan fungsi pemetaan murni `map_response_body`.
 - `mock.py`: `MockSource` dan tabel IP demo. Payload sintetis dilewatkan ke fungsi pemetaan adapter asli.
 
-Fixture di `tests/fixtures/sources/` (17 file): 2 respons nyata 29 Okt 2026 (IP `118.25.6.39`, apa adanya dari lampiran rencana) dan sisanya simulasi (IP dokumentasi `203.0.113.7`); nama file memuat `nyata` atau `simulasi`.
+Fixture di `tests/fixtures/sources/` (19 file): 2 respons nyata 29 Okt 2026 (IP `118.25.6.39`, apa adanya dari lampiran rencana) dan sisanya simulasi (IP dokumentasi `203.0.113.7`); nama file memuat `nyata` atau `simulasi`.
+
+Kelengkapan kasus simulasi Bab 9 (dijaga `test_sources_fixtures.py::test_fixture_simulasi_mencakup_kasus_bab_9`): skor 0, nol laporan, objek tidak ditemukan, statistik kosong, all-undetected, all-timeout, field hilang, 401, 403, 429, dan JSON rusak semuanya punya fixture. **Timeout bukan file**: ia exception httpx (`ReadTimeout`/`ConnectTimeout`) di test kedua adapter. Dua fixture yang awalnya belum ada ditambahkan setelah pengecekan: AbuseIPDB 403 (sebelumnya test memakai ulang body 401) dan AbuseIPDB skor 0 dengan laporan (sebelumnya "skor 0" dan "nol laporan" digabung dalam satu file). Isi body 403 AbuseIPDB adalah simulasi buatan sendiri, bukan salinan respons nyata.
 
 ### Keputusan dan penyimpangan dari rencana
 
 1. **`SourceResult` punya dua field di luar daftar rencana**: `flags` (tuple) dan `retry_after_seconds`. Rencana mewajibkan flag `NO_VENDOR_OPINION` dan `SUMBER_SIMULASI` serta "simpan `Retry-After`", tetapi daftar field-nya tidak punya tempat untuk itu.
-2. **Bab 3 dokumen riset tidak ada di repo.** Pemetaan diturunkan dari butir 3-5 rencana Tahap 1, bukan dari Bab 3 langsung. Developer perlu mencocokkan dengan PDF `riset-reputasi-ip-revisi-1.1` (lihat known gap 5).
+2. **Bab 3 dokumen riset tidak ada di repo.** Pemetaan awalnya diturunkan dari butir 3-5 rencana Tahap 1. Developer lalu mencocokkannya dengan Bab 3 (31 Okt): field wajib AbuseIPDB, `stats` hilang = `INVALID_RESPONSE`, `{}` = `INSUFFICIENT_DATA`, 401 = `AUTH` walau body rusak, dan 404 `NotFoundError` = `NO_RECORD` dinyatakan sesuai; satu koreksi pada `reason` SKIPPED (keputusan 5).
 3. **Hanya `abuseConfidenceScore` yang wajib** pada AbuseIPDB (integer 0-100; `bool`, float, string, null ditolak). `totalReports`, `numDistinctUsers`, `lastReportedAt`, `isWhitelisted` yang hilang atau salah tipe menjadi null di bukti dan tidak menggagalkan skor. Rencana hanya menyebut "field wajib" tanpa daftar.
 4. **VirusTotal: `last_analysis_stats` hilang atau bukan objek = `INVALID_RESPONSE`; objek kosong `{}` = `INSUFFICIENT_DATA`.** Rencana hanya mendefinisikan yang kedua. Nilai statistik yang ada harus integer >= 0 (bukan `bool`); kunci yang tidak ada dihitung 0. Hanya lima kunci (`malicious`, `suspicious`, `harmless`, `undetected`, `timeout`) yang disalin ke bukti; kunci lain diabaikan.
-5. **`reason` null untuk status non-ERROR** (`NO_RECORD`, `INSUFFICIENT_DATA`, `OK_*`). Rencana tidak mendefinisikan kode alasan untuk status itu; tidak ada kode karangan.
+5. **`reason` wajib untuk `ERROR` dan `SKIPPED`, null untuk status lain** (`NO_RECORD`, `INSUFFICIENT_DATA`, `OK_*`). Awalnya saya menulis "null untuk semua status non-ERROR"; developer mengoreksinya setelah mencocokkan dengan Bab 3 ("SKIPPED; nilai null; sertakan alasan"). Aturan ditegakkan di `SourceResult.__post_init__` (ValueError bila dilanggar), bukan hanya konvensi. Kode alasan SKIPPED ditambahkan ke `SourceReason`: `ADAPTER_NOT_IMPLEMENTED` (sama dengan string di `ip_checks.collect_sources`, dipakai sampai Tahap 2) dan `QUOTA_INTERNAL` (dipakai pembatas kuota, Tahap 3). Tidak ada kode karangan untuk status lain.
 6. **Status HTTP diklasifikasi sebelum body dibaca.** JSON hanya diparse untuk 200 (dan 404 VirusTotal), jadi body rusak pada 401 tetap `AUTH`. 404 VirusTotal tanpa `error.code == "NotFoundError"` (atau body tidak terbaca) = `UPSTREAM`. `NotFoundError` pada status selain 404 bukan `NO_RECORD`.
 7. **Redirect tidak diikuti** (`follow_redirects=False` dan `timeout=` dipasang per request, bukan hanya di client). httpx meneruskan header kustom seperti `Key`/`x-apikey` ke tujuan redirect, dan client bisa disuntikkan. 3xx = `UPSTREAM`.
 8. **IP divalidasi ulang di dalam adapter** (`require_public_ip`, dipakai juga mock). IP tidak valid atau tidak publik melempar `ValueError` tanpa request. Alasan: VirusTotal menaruh IP di path URL. Hasilnya, adapter memakai IP kanonik (spasi dipangkas).
@@ -82,8 +84,8 @@ Fixture di `tests/fixtures/sources/` (17 file): 2 respons nyata 29 Okt 2026 (IP 
 ### Hasil gerbang
 
 - `docker compose up -d --build`: `db` dan `api` `healthy`.
-- `pytest -q -p no:cacheprovider`: **492 passed** (Tahap 0: 271; 221 test baru), 1 warning (known gap 4).
-- `ruff check --no-cache .`: bersih. `ruff format --no-cache --check .`: 66 file sudah terformat.
+- `pytest -q -p no:cacheprovider`: **533 passed** (Tahap 0: 271; 262 test baru), 1 warning (known gap 4).
+- `ruff check --no-cache .`: bersih. `ruff format --no-cache --check .`: 67 file sudah terformat.
 - Uji mutasi manual (salinan kode di luar repo, tidak di-commit): 10 perubahan sengaja ke kode (redirect diikuti, `bool` dianggap integer, `min(100, ...)` dihapus, timeout per request dihapus, guard IP dihapus, 401 jadi `UPSTREAM`, error membawa skor 0, key di query string, mock tanpa flag simulasi, nol laporan jadi `NO_RECORD`) masing-masing menggagalkan minimal 2 test.
 - `git status --porcelain`: tidak ada `.env` atau `secrets/`. Pencarian pola rahasia pada diff hanya menemukan nama variabel dan key uji palsu `kunci-uji-palsu-xyz`. Fixture bersih dari `whois`, `rdap`, email, dan telepon (juga dijaga `tests/test_sources_fixtures.py`).
 
@@ -91,7 +93,8 @@ Fixture di `tests/fixtures/sources/` (17 file): 2 respons nyata 29 Okt 2026 (IP 
 
 - `test_sources_abuseipdb.py`, `test_sources_virustotal.py`: satu test (atau satu kasus parametrize) per baris pemetaan butir 3-5 rencana; bentuk request (header, parameter, timeout, tanpa key di URL); key tidak muncul di URL, `caplog` level DEBUG, `repr(result)`, `asdict(result)`, `repr(adapter)` pada jalur sukses dan error; IP tidak valid tidak memicu request.
 - `test_sources_mock.py`: satu kasus per baris tabel IP demo, IP di luar tabel, flag simulasi pada semua hasil, tanpa jaringan (`socket.connect` dan `getaddrinfo` diblokir).
-- `test_sources_fixtures.py`: nama berlabel nyata/simulasi, JSON valid, bebas data kontak.
+- `test_sources_base.py`: aturan `reason` (wajib untuk `ERROR` dan `SKIPPED`, ditolak untuk status lain), diuji untuk semua status. Dua mutasi pada pengecekan itu menggagalkan 2 dan 8 test.
+- `test_sources_fixtures.py`: nama berlabel nyata/simulasi, JSON valid, bebas data kontak, dan kelengkapan kasus Bab 9.
 - `tests/sources_support.py`: alat bantu (`MockTransport`, pemuat fixture, invarian "hanya `OK_*` yang boleh membawa skor").
 
 ## Known gaps
@@ -101,6 +104,6 @@ Fixture di `tests/fixtures/sources/` (17 file): 2 respons nyata 29 Okt 2026 (IP 
 3. **Uji start `live` dengan file key valid lewat kontainer** baru bisa dilakukan setelah guard dicabut (Tahap 3); sebelum itu hanya dibuktikan lewat test subprocess.
 4. **Peringatan deprecation Starlette `TestClient`** (`StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated; install httpx2 instead`, dari `fastapi/testclient.py:1`) muncul di ringkasan pytest. **Sudah ada sebelum Tahap 0**: dicek 2026-10-30 dengan menjalankan test `main` (commit `1badd61`) di worktree sementara memakai image yang sama (fastapi 0.162.0, starlette 1.10.0, httpx 0.28.1; `requirements.txt` fastapi dan httpx identik dengan Tahap 0, httpx hanya pindah file): 209 passed, 1 warning, teks sama. Jadi bukan akibat Tahap 0. Belum diperbaiki.
    **Keputusan (developer, 2026-10-31):** Tahap 1 tetap memakai `httpx`. Migrasi ke `httpx2` dikerjakan sebagai issue terpisah setelah demo, karena nama logger dan trust store SSL berubah. Nama logger berubah berarti pengaman logging (`httpx`/`httpcore` dipaku di `WARNING`, lihat Tahap 0) tidak lagi mengenai logger client baru; trust store SSL berubah berarti perilaku verifikasi TLS ke sumber dan nanti ke MISP perlu diuji ulang. Sampai migrasi, warning ini dibiarkan.
-5. **Pemetaan Tahap 1 belum dicocokkan dengan Bab 3 dokumen riset.** PDF `riset-reputasi-ip-revisi-1.1` tidak ada di repo, jadi pemetaan diturunkan dari butir 3-5 rencana. Keputusan Tahap 1 nomor 3-6 mengisi celah yang tidak tertulis di rencana (field wajib AbuseIPDB, `stats` hilang vs kosong, `reason` null). Developer perlu mencocokkannya dengan Bab 3 sebelum Tahap 2.
+5. ~~Pemetaan Tahap 1 belum dicocokkan dengan Bab 3 dokumen riset~~ **Selesai**: dicocokkan dengan Bab 3 oleh developer, 31 Okt; satu koreksi (`reason` SKIPPED, lihat keputusan 5). PDF riset tidak ditambahkan ke repo.
 6. **Test `assess()` untuk status non-`OK_*` belum ada.** Keputusan 6 rencana ("tambahkan test-nya") tidak ditempatkan pada tahap mana pun, dan Tahap 1 tidak menyentuh `ip_checks.assess()`. Usul: kerjakan di Tahap 2, saat `assess()` dipakai oleh `SourceResult`.
 7. **Belum ada pemakai `SourceResult` di luar test.** Tidak ada `as_dict`/serialisasi untuk `evidence_summary` dan `source_time` ke respons API atau DB (kontrak respons = Tahap 2, kolom cache = Tahap 3).
