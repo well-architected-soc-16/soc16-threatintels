@@ -11,9 +11,9 @@ Diperbarui: 2026-10-31. Rujukan: [`TASK-02-sumber-reputasi-skor.md`](TASK-02-sum
 | 1 | Adapter AbuseIPDB + VirusTotal, pemetaan status | #23 | Selesai, ter-merge |
 | 2 | Skor, label, flag, kontrak respons | #24 | Selesai, ter-merge |
 | 3 | Cache + pembatas kuota bersama | #25 | Selesai, ter-merge |
-| 4 | Uji API nyata + rapikan | - | Belum |
+| 4 | Uji API nyata + rapikan | - | Kode, test, dan dokumen selesai (commit lokal, belum di-push). **Uji live menunggu developer**; PR (`Closes #20`) dibuka setelah hasilnya dikirim |
 
-Hasil terakhir (Tahap 3): `pytest` **740 passed**, `ruff check` dan `ruff format --check` bersih, `docker compose ps` `db` dan `api` `healthy`.
+Hasil terakhir (Tahap 4): `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `docker compose ps` `db` dan `api` `healthy`.
 
 ## Tahap 0
 
@@ -207,6 +207,41 @@ Alur satu sumber di `SourceGateway.fetch`: cache hit → kembalikan (tanpa baris
 - `test_collect_isolation.py`: isolasi `INTERNAL_ERROR`, log tanpa pesan, `InputRejectedError` keras dan turunan `ValueError` lain (`JSONDecodeError`, `UnicodeDecodeError`, `ValidationError`) diisolasi, reservasi tetap dihitung; test gerbang untuk kegagalan `cache.store` ada di `test_source_gateway.py` dan `test_checks_cache_api.py`.
 - `test_sources_factory.py`, `test_source_tables.py`, tambahan di `test_sources_abuseipdb.py` (header rate-limit), `test_sources_base.py`, `test_migrations.py`, `test_sources_config.py`.
 
+## Tahap 4
+
+Dikerjakan di branch `feat/task-02-tahap-4-smoke-live`. Batasan keras dari developer dipatuhi: **tidak ada panggilan ke API AbuseIPDB/VirusTotal**, `SOURCES_MODE` di `.env` tidak diubah, isi `secrets/` tidak dibaca atau dicetak. Satu-satunya eksekusi skrip di kontainer memakai `--ip 10.0.0.1` (ditolak sebelum request apa pun, exit 2). Bagian yang membutuhkan API nyata dijalankan developer sendiri (lihat "Catatan untuk Tahap 4" dan README).
+
+### Yang dikerjakan
+
+- `backend/scripts/smoke_sources.py`: `python -m scripts.smoke_sources [--ip IP]` (bawaan `118.25.6.39`). Mencetak per sumber: status HTTP, status hasil, reason, skor ternormalisasi, durasi, `rate_limit_remaining`, `rate_limit_reset`, `retry_after_detik`, apakah dari cache, flag, waktu sumber, dan ringkasan bukti. Exit code `0` semua sumber menjawab, `1` ada sumber `ERROR`/`SKIPPED`, `2` ditolak sebelum request.
+- `services/sources/factory.py`: pembungkusan adapter dengan `SourceGateway` (TTL, kebijakan kuota, `params_key`) dipindah dari `get_sources` ke fungsi baru `build_gateways(engine)`. `get_sources` kini memanggilnya. Perilaku API tidak berubah; skrip memakai fungsi yang sama sehingga limiter, cache, dan `source_calls` pasti identik dengan jalur API.
+- README: bagian "Mengaktifkan mode live dan menjalankan smoke test" (perintah fish: `read -s`, `sed` untuk `SOURCES_MODE`, `--force-recreate`, `tee` ke folder bukti di luar repo, pemeriksaan `source_calls`, cara kembali ke mock), struktur backend.
+- `TASK-01-progress.md`: known gap 4 dicoret.
+
+### Keputusan dan penyimpangan dari rencana
+
+1. **Skrip ada di `backend/scripts/`, bukan `scripts/` di root repo.** Rencana menulis `scripts/smoke_sources.py`, tetapi folder `scripts/` yang ikut ke image (`COPY scripts ./scripts`) dan sudah berisi `seed_users.py` ada di `backend/`; perintah `python -m scripts.smoke_sources` dari rencana hanya jalan dengan letak itu.
+2. **`build_gateways(engine)` diekstrak di `factory.py`** (penyimpangan kecil dari "tambah skrip saja") supaya skrip tidak menyalin kebijakan kuota/TTL. Menyalinnya berisiko skrip dan API berbeda diam-diam.
+3. **Skrip menolak jalan bila `SOURCES_MODE` bukan `live`** (exit 2, tanpa request, tanpa menyentuh DB). Hasil mock bukan bukti API nyata dan berdata simulasi. IP yang tidak lolos `validate_ip` juga ditolak sebelum gerbang dibuat (aturan domain: input ditolak tidak memicu request, cache, atau kuota).
+4. **Exit code 1 untuk sumber `ERROR`/`SKIPPED`**, 0 untuk `OK_*`, `NO_RECORD`, dan `INSUFFICIENT_DATA` (sumber menjawab dengan benar). Dipilih agar smoke yang gagal terlihat di skrip/pipeline.
+5. **Exception tak terduga dicetak sebagai nama kelas saja**, sejalan dengan aturan log di Tahap 3 (pesan bisa memuat detail koneksi/header).
+6. **Tidak ada baris "paket akun" dan "tanggal" otomatis dari API**: skrip tidak tahu paket akun; developer mencatatnya sendiri di folder bukti. Tanggal ada di nama berkas `tee`.
+
+### Hasil gerbang
+
+- `docker compose up -d --build`; `docker compose ps`: `db` dan `api` `healthy`.
+- `pytest -q -p no:cacheprovider`: **763 passed** (Tahap 3: 740; 23 test baru), 1 warning (known gap 4).
+- `ruff check --no-cache .`: bersih. `ruff format --no-cache --check .`: 85 file sudah terformat.
+- Pemeriksaan rahasia sebelum commit dijalankan (lihat laporan sesi).
+
+### Test baru (`test_smoke_sources.py`, 23, tanpa jaringan)
+
+- Semua request lewat `httpx.MockTransport` dengan key palsu `kunci-uji-palsu-xyz`; nol panggilan ke API nyata.
+- Jalur sukses (fixture nyata 29 Okt): ringkasan per sumber dan exit 0; dua baris `source_calls` `live` dengan `result_status` terisi; run kedua dari cache tanpa request dan tanpa baris baru; kuota internal habis melapor `SKIPPED/QUOTA_INTERNAL`, exit 1, tanpa request.
+- **Key tidak bocor**: pada sukses, 401, 403, 429 (dengan `Retry-After`), timeout, `ConnectError` (pesan exception memuat key), JSON rusak, exception tak terduga yang pesannya memuat key, dan log (`caplog` DEBUG); keluaran tidak memuat key maupun nama header `x-apikey`/`authorization`.
+- `main`: IP bawaan, argumen `--ip`, penolakan IP tak valid (`10.0.0.1`, `127.0.0.1`, `192.168.1.1`, IPv6, teks acak, kosong) dan mode mock: nol request dan nol baris `source_calls`.
+- `build_gateways` mengembalikan `SourceGateway` berurutan AbuseIPDB lalu VirusTotal.
+
 ## Catatan untuk Tahap 3 (dipenuhi di Tahap 3)
 
 Ditambahkan di akhir Tahap 2 (dari known gap 9) sebagai syarat Tahap 3. **Semuanya dipenuhi di Tahap 3**: butir 1 oleh desain `SourceGateway`/`get_sources`, butir 2 oleh `test_checks_cache_api.py` (spy, tabel kosong, kontrol, uji mutasi "akses cache dipindah ke dependency" menggagalkan 9 test), butir 3 oleh keputusan Tahap 3 nomor 10.
@@ -287,7 +322,7 @@ Seluruh mode live sejauh ini hanya diuji lewat `MockTransport` dan fixture. Fixt
 12. ~~`ValueError` dan turunannya tidak diisolasi oleh `collect_sources`~~ **Selesai di Tahap 3** atas keputusan developer: `InputRejectedError` (subclass `ValueError`, dilempar hanya oleh `require_public_ip`) adalah satu-satunya yang dilempar keras; `JSONDecodeError`, `UnicodeDecodeError`, `ValidationError`, dan `ValueError` biasa diisolasi menjadi `INTERNAL_ERROR`. Ujinya: adapter disuntik tiap jenis exception itu, sumber lain tetap tampil; `InputRejectedError` gagal keras; mutasi membuktikan keduanya.
 13. **Tabel `source_cache` dan `source_calls` tumbuh tanpa batas** (tidak ada retensi atau pembersihan; baris cache kedaluwarsa tetap ada sampai ditimpa upsert). Pada skala tim kecil dan kuota 1.000 per hari ini tidak mendesak, tetapi belum ada kebijakan retensi.
 14. **Tanpa single-flight** (known gap 1 rencana): dua cek IP yang sama hampir bersamaan sama-sama meleset cache dan sama-sama memakai kuota. Limiter tetap menjamin batas tidak terlewati.
-15. **Mode live belum pernah dijalankan terhadap API nyata.** Format sebenarnya `X-RateLimit-Reset`, perilaku `Retry-After`, dan kuota riil baru terbukti di Tahap 4. `Retry-After` berbentuk tanggal HTTP diabaikan (cooldown 60 detik).
+15. **Mode live belum pernah dijalankan terhadap API nyata (masih terbuka setelah Tahap 4 dikodekan).** Skrip smoke sudah ada, tetapi menjalankannya adalah langkah developer; gap ini ditutup setelah hasilnya dikirim dan dicocokkan. Format sebenarnya `X-RateLimit-Reset`, perilaku `Retry-After`, dan kuota riil baru terbukti di Tahap 4. `Retry-After` berbentuk tanggal HTTP diabaikan (cooldown 60 detik).
 16. **Jendela VirusTotal 4 per menit dihitung geser 60 detik**, bukan menit kalender seperti di server VirusTotal; lebih ketat, jadi tidak pernah melebihi batas, tetapi bisa menolak permintaan yang masih sah di sisi server.
 17. **Sesi request tetap dalam transaksi selama sumber dipanggil.** Dependency autentikasi memakai sesi request sehingga `db.in_transaction()` bernilai `True` saat `collect_sources` berjalan (diperiksa langsung di Tahap 3), dan setiap langkah gerbang membuka koneksi kedua. Satu cek aktif memegang hingga 2 koneksi; dengan pool bawaan SQLAlchemy (5 + 10 overflow) sekitar 7 cek live bersamaan sudah menghabiskan pool dan sisanya menunggu (batas tunggu bawaan 30 detik). Request live bisa memakan hingga 10 detik per sumber (`SOURCE_TIMEOUT_SECONDS`). `TimeoutError` pool di dalam gerbang akan terisolasi sebagai `INTERNAL_ERROR` (keputusan Tahap 3 nomor 11), bukan 500. **Aman untuk demo dan tim 4 orang**, jadi tidak diperbaiki di Tahap 3. Perbaikan nanti: tutup transaksi sesi request sebelum memanggil sumber (alternatif: menaikkan `pool_size`).
 18. **Tanpa force refresh** (known gap 2 rencana, 29 Okt). Analis tidak bisa melewati cache sebelum TTL habis (mis. `OK_NO_SIGNAL` 24 jam). Sekarang lebih terasa karena cache benar-benar ada (Tahap 3). Tidak dikerjakan di TASK-02.
@@ -295,3 +330,4 @@ Seluruh mode live sejauh ini hanya diuji lewat `MockTransport` dan fixture. Fixt
 20. **Data cache kedaluwarsa tidak ditampilkan** (known gap 4 rencana), termasuk saat sumber gagal; analis hanya melihat cek lama di riwayat.
 21. **Syarat non-komersial VirusTotal** (known gap 5 rencana). Akun gratis dilarang untuk business workflow atau produk komersial. Konfirmasi ke dosen sebelum soc-ir dipakai sebagai SOC operasional.
 22. **Bobot, koefisien, ambang label, dan TTL cache masih "percobaan"** (`scoring_version: v1-percobaan`; TTL 6/24/1 jam). Tidak diubah tanpa keputusan tim (CLAUDE.md). Bukti pembulatan (gap 10) bergantung pada bobot 30/25; test-nya harus ikut ditinjau bila rumus berubah.
+23. **Skrip smoke hanya mencetak nilai header yang sudah diparse** (`rate_limit_remaining`, `rate_limit_reset`, `retry_after_detik`), bukan header mentah, supaya tidak ada risiko mencetak header sensitif. Akibatnya bila format nyata berbeda dari yang dibaca kode, skrip hanya menampilkan `-` dan bentuk aslinya tidak terlihat; developer cukup mencatat "header ada tapi tercetak `-`", lalu bentuknya diperiksa terpisah (mis. dari bukti curl 29 Okt) sebelum parser diubah.

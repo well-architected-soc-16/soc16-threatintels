@@ -191,7 +191,7 @@ IP yang ditolak (privat, loopback, link-local, multicast, dokumentasi, reserved,
 
 ### Sumber reputasi dan mode simulasi
 
-Adapter AbuseIPDB dan VirusTotal ada di `backend/app/services/sources/`. `POST /checks` memanggil adapter lewat `SOURCES_MODE`; `SOURCES_MODE=live` memakai adapter asli lewat cache dan pembatas kuota (lihat bagian berikutnya).
+Adapter AbuseIPDB dan VirusTotal ada di `backend/app/services/sources/`. `POST /checks` memanggil adapter lewat `SOURCES_MODE`; `SOURCES_MODE=live` memakai adapter asli lewat cache dan pembatas kuota (lihat bagian berikutnya; langkah mengaktifkannya ada di "Mengaktifkan mode live dan menjalankan smoke test").
 
 Pada `SOURCES_MODE=mock`, adapter mock menjawab tanpa jaringan dan **semua hasilnya fiktif**. Setiap hasil, termasuk yang berstatus `ERROR`, diberi flag `SUMBER_SIMULASI` dan `"simulasi": true` di bukti. Skenario dipilih dari tabel IP demo berikut (IP resolver publik terkenal, supaya hasil "berbahaya" yang jelas palsu tidak mencoreng pihak kecil). IP di luar tabel mendapat hasil bawaan: kedua sumber `OK_NO_SIGNAL` dengan skor 0.
 
@@ -216,6 +216,54 @@ Setiap sumber melewati cache lalu pembatas kuota sebelum request keluar. Keduany
 - **Peringatan kuota VirusTotal:** akun gratis hanya 4 permintaan per menit. Cek IP **baru** ke-5 dalam semenit akan melewati VirusTotal. Panggilan mode `mock` dicatat tetapi tidak pernah dihitung ke kuota ini.
 - Setiap request keluar dicatat di tabel `source_calls` (sumber, mode, waktu, status HTTP, hasil, durasi) tanpa key, header, maupun body.
 - Kegagalan tak terduga di satu sumber (bug) menjadi `ERROR` dengan alasan `INTERNAL_ERROR` untuk sumber itu saja; sumber lain tetap tampil.
+
+#### Mengaktifkan mode live dan menjalankan smoke test
+
+Lakukan ini hanya saat benar-benar perlu membuktikan API nyata. **Memakai kuota bersama tim**: satu smoke test = 1 kuota AbuseIPDB + 1 kuota VirusTotal (VirusTotal hanya 4 per menit). Jangan mengulanginya berturut-turut, dan jangan sengaja memicu 429.
+
+**1. Isi kedua file key** tanpa menampilkannya (jangan ditempel ke chat atau issue; `chmod 644` sudah diatur di langkah pengaturan awal):
+
+```fish
+read -s key; printf '%s' $key > secrets/abuseipdb_api_key.txt; set -e key
+read -s key; printf '%s' $key > secrets/virustotal_api_key.txt; set -e key
+```
+
+**2. Ubah `SOURCES_MODE` di `.env` menjadi `live`**, lalu buat ulang kontainer `api`:
+
+```fish
+sed -i 's/^SOURCES_MODE=.*/SOURCES_MODE=live/' .env
+docker compose up -d --force-recreate api
+docker compose ps
+```
+
+Jika file key kosong atau masih berisi nilai contoh, `api` menolak start dan pesannya hanya menyebut nama variabel (cek `docker compose logs api`).
+
+**3. Jalankan skrip smoke** untuk satu IPv4 publik (bawaan `118.25.6.39`, IP yang dipakai pada fixture 29 Okt). Skrip lewat `SourceGateway` dan pembatas kuota yang sama dengan API, jadi ikut terhitung kuota dan tercatat di `source_calls`:
+
+```fish
+mkdir -p ~/bukti-soc16
+set stamp (date +%Y-%m-%d-%H%M)
+docker compose exec -T api python -m scripts.smoke_sources --ip 118.25.6.39 | tee ~/bukti-soc16/smoke-$stamp.txt
+```
+
+Simpan keluaran di folder bukti **di luar repo**. Per sumber skrip mencetak status HTTP, status hasil, reason, skor ternormalisasi, durasi, `rate_limit_remaining` dan `rate_limit_reset` (AbuseIPDB), `retry_after_detik` (bila 429), flag, dan ringkasan bukti. Skrip tidak pernah mencetak key atau header request. Exit code `0` bila semua sumber menjawab, `1` bila ada sumber `ERROR`/`SKIPPED`, `2` bila ditolak sebelum request apa pun (IP tidak valid atau `SOURCES_MODE` bukan `live`). Bila `rate_limit_remaining`/`rate_limit_reset` tercetak `-` padahal HTTP 200, format header nyata berbeda dari yang dibaca kode; catat sebagai temuan.
+
+**4. Periksa pemakaian kuota** dan cek kedua dari cache. Di Swagger (`/docs`), login lalu `POST /api/v1/checks` dengan IP yang sama; kedua sumber harus `from_cache: true`. Lalu:
+
+```fish
+docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT source, mode, http_status, result_status, rate_limit_remaining FROM source_calls ORDER BY id DESC LIMIT 5"'
+```
+
+Baris `live` tidak boleh bertambah akibat cek kedua.
+
+**5. Kembalikan ke mode simulasi** bila tidak lagi dibutuhkan:
+
+```fish
+sed -i 's/^SOURCES_MODE=.*/SOURCES_MODE=mock/' .env
+docker compose up -d --force-recreate api
+```
+
+Hasil mode `mock` dan `live` tercampur di riwayat `GET /checks` pada DB yang sama (belum ada filter `simulated`). Hasil mock selalu berflag `SUMBER_SIMULASI`; saat demo, mulai dari DB kosong atau sebut hasil mock sebagai simulasi.
 
 ### Daftar Endpoint
 
@@ -299,7 +347,7 @@ backend/
     services/          audit, ip_validation, ip_checks, scoring, misp/ (Protocol, mock, kerangka live),
                        sources/ (adapter AbuseIPDB dan VirusTotal, mock, cache, quota, gateway, factory)
   alembic/             migrasi database
-  scripts/             entrypoint.sh, seed_users.py
+  scripts/             entrypoint.sh, seed_users.py, smoke_sources.py (manual, API nyata)
   tests/
 docs/tasks/            rencana dan catatan kemajuan per task
 ```
