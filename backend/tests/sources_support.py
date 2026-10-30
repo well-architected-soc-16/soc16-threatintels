@@ -8,12 +8,15 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from pydantic import SecretStr
 
+from app.services.sources.abuseipdb import AbuseIpdbSource
 from app.services.sources.base import (
     REASON_REQUIRED_STATUSES,
     SCORED_STATUSES,
     SourceResult,
 )
+from app.services.sources.virustotal import VirusTotalSource
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "sources"
 # Mudah dicari di URL, log, atau hasil bila bocor.
@@ -87,3 +90,33 @@ def assert_score_invariants(result: SourceResult) -> None:
 def leak_surfaces(result: SourceResult, adapter: object) -> list[str]:
     """Semua representasi teks yang tidak boleh memuat key."""
     return [repr(result), repr(dataclasses.asdict(result)), repr(adapter), str(adapter)]
+
+
+NYATA_ABUSEIPDB = "abuseipdb_nyata_2026-10-29_118.25.6.39.json"
+NYATA_VIRUSTOTAL = "virustotal_nyata_2026-10-29_118.25.6.39.json"
+
+
+def live_adapters(abuse_responder: Responder, vt_responder: Responder):
+    """Adapter live asli (bukan mock) di atas `MockTransport`, untuk uji ujung ke ujung."""
+    abuse_client, _ = client_for(abuse_responder)
+    vt_client, _ = client_for(vt_responder)
+    return [
+        AbuseIpdbSource(
+            abuse_client,
+            SecretStr(FAKE_KEY),
+            max_age_days=30,
+            timeout_seconds=TIMEOUT_SECONDS,
+            clock=lambda: NOW,
+        ),
+        VirusTotalSource(
+            vt_client,
+            SecretStr(FAKE_KEY),
+            timeout_seconds=TIMEOUT_SECONDS,
+            clock=lambda: NOW,
+        ),
+    ]
+
+
+def post(client, login, ip: str, user: str = "analyst"):
+    """`POST /checks` sebagai `user` (harus sudah dibuat dengan make_user)."""
+    return client.post("/api/v1/checks", json={"ip": ip}, headers=login(user))

@@ -127,16 +127,22 @@ def make_user(db: Session):
 @pytest.fixture
 def make_check(db: Session):
     def _make(
-        ip: str = "8.8.8.8", assessment_status: str = "TIDAK_TERSEDIA"
+        ip: str = "8.8.8.8",
+        assessment_status: str = "TIDAK_TERSEDIA",
+        *,
+        risk_score: float | None = None,
+        coverage: str = "0/2",
+        flags: list[str] | None = None,
+        sources: list[dict] | None = None,
     ) -> IpCheck:
         check = IpCheck(
             ip=ip,
             assessment_status=assessment_status,
-            risk_score=None,
+            risk_score=risk_score,
             scoring_version="v1-percobaan",
-            coverage="0/2",
-            flags=[],
-            sources=[],
+            coverage=coverage,
+            flags=flags or [],
+            sources=sources or [],
             checked_by="seed",
         )
         db.add(check)

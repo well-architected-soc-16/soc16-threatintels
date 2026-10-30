@@ -27,7 +27,8 @@ class IpCheck(Base):
     # Jumlah sumber yang bisa dinilai dari total, mis. "0/2".
     coverage: Mapped[str] = mapped_column(String(8))
     flags: Mapped[list[str]] = mapped_column(JSONB)
-    # Hasil per sumber: [{"source", "status", "reason"}, ...].
+    # Hasil per sumber (lihat ip_checks.to_stored), waktu UTC. Baris lama hanya berisi
+    # {"source", "status", "reason"}; pembaca harus menganggap field lain opsional.
     sources: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
     checked_by: Mapped[str] = mapped_column(String(64))
     checked_at: Mapped[datetime] = mapped_column(

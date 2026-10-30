@@ -10,6 +10,8 @@ from app.schemas.check import CheckCreate, CheckOut, CheckPage, CheckRejected
 from app.schemas.common import FORBIDDEN, UNAUTHORIZED, ErrorResponse
 from app.services import audit, ip_checks
 from app.services.ip_validation import validate_ip
+from app.services.sources.base import ReputationSource
+from app.services.sources.factory import get_sources
 
 CheckWriter = Annotated[User, Depends(require_roles(Role.ADMIN, Role.ANALYST))]
 
@@ -31,7 +33,11 @@ router = APIRouter(prefix="/checks", tags=["checks"], responses=UNAUTHORIZED)
     },
 )
 def create_check(
-    body: CheckCreate, request: Request, user: CheckWriter, db: DbSession
+    body: CheckCreate,
+    request: Request,
+    user: CheckWriter,
+    db: DbSession,
+    sources: Annotated[list[ReputationSource], Depends(get_sources)],
 ) -> IpCheck | JSONResponse:
     validation = validate_ip(body.ip)
 
@@ -55,16 +61,16 @@ def create_check(
             content=rejected.model_dump(mode="json"),
         )
 
-    sources = ip_checks.collect_sources(validation.ip)
-    assessment_status, coverage, risk_score = ip_checks.assess(sources)
+    results = ip_checks.collect_sources(validation.ip, sources)
+    assessment = ip_checks.assess(results)
     check = IpCheck(
         ip=validation.ip,
-        assessment_status=assessment_status,
-        risk_score=risk_score,
+        assessment_status=assessment.assessment_status,
+        risk_score=assessment.risk_score,
         scoring_version=ip_checks.SCORING_VERSION,
-        coverage=coverage,
-        flags=[],
-        sources=sources,
+        coverage=assessment.coverage,
+        flags=assessment.flags,
+        sources=[ip_checks.to_stored(r) for r in results],
         checked_by=user.username,
     )
     db.add(check)
@@ -75,7 +81,12 @@ def create_check(
         result="success",
         actor_username=user.username,
         target=check.ip,
-        detail={"check_id": check.id, "assessment_status": assessment_status},
+        # Hanya status per sumber: tanpa evidence dan tanpa apa pun yang berkaitan dengan key.
+        detail={
+            "check_id": check.id,
+            "assessment_status": assessment.assessment_status,
+            "sources": {r.source: r.status.value for r in results},
+        },
         ip_address=audit.client_ip(request),
     )
     db.commit()
