@@ -183,6 +183,24 @@ Hasil cek untuk IP publik saat ini berupa `assessment_status: "TIDAK_TERSEDIA"`,
 
 IP yang ditolak (privat, loopback, link-local, multicast, dokumentasi, reserved, IPv6, atau format salah) dijawab **422** dengan `assessment_status: "INPUT_DITOLAK"` dan `reason_code`; input yang ditolak tidak memicu permintaan keluar apa pun.
 
+### Sumber reputasi dan mode simulasi
+
+Adapter AbuseIPDB dan VirusTotal ada di `backend/app/services/sources/`. Sampai Tahap 2 TASK-02 selesai, adapter belum dipanggil dari `POST /checks`; `SOURCES_MODE=live` juga masih ditolak aplikasi (menunggu pembatas kuota).
+
+Pada `SOURCES_MODE=mock`, adapter mock menjawab tanpa jaringan dan **semua hasilnya fiktif**. Setiap hasil, termasuk yang berstatus `ERROR`, diberi flag `SUMBER_SIMULASI` dan `"simulasi": true` di bukti. Skenario dipilih dari tabel IP demo berikut (IP resolver publik terkenal, supaya hasil "berbahaya" yang jelas palsu tidak mencoreng pihak kecil). IP di luar tabel mendapat hasil bawaan: kedua sumber `OK_NO_SIGNAL` dengan skor 0.
+
+| IP | AbuseIPDB (A) | VirusTotal (V) |
+|---|---|---|
+| `1.1.1.1` | 90 | 80 (`malicious=10`) |
+| `1.0.0.1` | 90 | 0 |
+| `8.8.8.8` | 90 | `ERROR` `TIMEOUT` |
+| `8.8.4.4` | `ERROR` `TIMEOUT` | `NO_RECORD` |
+| `9.9.9.9` | 90, `isWhitelisted=true` | 80 |
+| `149.112.112.112` | 0 | 0, semua `undetected` (`NO_VENDOR_OPINION`) |
+| `208.67.222.222` | 0 | `INSUFFICIENT_DATA` (semua `timeout`) |
+
+> **Peringatan.** Hasil untuk IP-IP di atas **fiktif**; itu bukan reputasi sebenarnya dari resolver tersebut. Hasil simulasi **tidak boleh** dimasukkan ke MISP atau blocklist karena bukan data nyata. Saat demo, sebut hasil mode mock sebagai "simulasi".
+
 ### Daftar Endpoint
 
 Semua endpoint berawalan `/api/v1`. Selain `/health` dan `/auth/login`, semuanya membutuhkan header `Authorization: Bearer <token>`.
