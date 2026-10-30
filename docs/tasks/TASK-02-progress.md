@@ -13,7 +13,7 @@ Diperbarui: 2026-10-31. Rujukan: [`TASK-02-sumber-reputasi-skor.md`](TASK-02-sum
 | 3 | Cache + pembatas kuota bersama | - | Belum |
 | 4 | Uji API nyata + rapikan | - | Belum |
 
-Hasil terakhir (Tahap 2): `pytest` **643 passed**, `ruff check` dan `ruff format --check` bersih, `docker compose ps` `db` dan `api` `healthy`.
+Hasil terakhir (Tahap 2): `pytest` **645 passed**, `ruff check` dan `ruff format --check` bersih, `docker compose ps` `db` dan `api` `healthy`.
 
 ## Tahap 0
 
@@ -123,6 +123,9 @@ Kode:
 9. **`SOURCE_NAMES` pindah dari `ip_checks` ke `sources/factory.py`**; urutan hasil selalu AbuseIPDB lalu VirusTotal.
 10. **`make_check` di conftest menerima `risk_score`, `coverage`, `flags`, `sources`.** Test lama `test_checks` yang mengharapkan `SKIPPED/ADAPTER_NOT_IMPLEMENTED` diganti: ekspektasi "null, bukan 0" dipertahankan dengan IP `8.8.4.4`. Spy `collect_sources` di tiga test diubah ke tanda tangan baru; tidak ada test yang dihapus.
 
+11. **`scoring_version` tetap `v1-percobaan`** (dikonfirmasi developer). Bobot 30/25, ambang 25/50/75, dan selisih 50 tidak diubah. Dijaga `assert body["scoring_version"] == "v1-percobaan"` di `test_checks.py` dan `test_checks_scoring_api.py` (semua IP demo), dan konstanta `scoring.SCORING_VERSION`.
+12. **`isWhitelisted: null` tidak menghasilkan flag `WHITELISTED`** (dikonfirmasi developer); hanya `true` yang menghasilkannya, hanya dari AbuseIPDB, dan tidak memangkas skor. Dijaga `test_whitelisted_hanya_jika_is_whitelisted_true` (kasus `null`, `false`, dan hilang) serta `test_is_whitelisted_null_dari_respons_abuseipdb_tidak_menghasilkan_flag` yang memakai fixture respons dengan `"isWhitelisted": null` lewat adapter asli.
+
 ### Cek selesai (rencana Tahap 2)
 
 - `12 malicious → V=96`, `13 → 100`: sudah diuji di `test_sources_virustotal.py` (Tahap 1).
@@ -134,16 +137,24 @@ Kode:
 ### Hasil gerbang
 
 - `docker compose up -d --build`: `db` dan `api` `healthy`; `/health` OK.
-- `pytest -q -p no:cacheprovider`: **643 passed** (Tahap 1: 533; 110 test baru), 1 warning (known gap 4).
+- `pytest -q -p no:cacheprovider`: **645 passed** (Tahap 1: 533; 112 test baru), 1 warning (known gap 4).
 - `ruff check --no-cache .`: bersih. `ruff format --no-cache --check .`: 72 file sudah terformat.
 - Uji mutasi manual (salinan di luar repo, tidak di-commit), masing-masing menggagalkan minimal 1 test dari lima file terkait: guard MISP dihapus (10 test), label dari nilai yang sudah dibulatkan (3), `SUMBER_SIMULASI` hanya dari sumber yang bisa dinilai (5), bobot 30→31 (10), ambang `≥50` jadi `>50` (2), status non-OK menambah cakupan (13), skor disimpan sudah dibulatkan (1), skor gabungan digeser +1 (11), audit memuat evidence (1), ambang label `<25` jadi `≤25` (3).
 - `git status --porcelain`: tidak ada `.env` atau `secrets/`.
 
 ### Test baru
 
-- `test_scoring.py`: rumus, pembulatan, batas label, semua flag (termasuk simulasi tanpa sumber yang bisa dinilai, urutan, dedup), `assess()` untuk tiap status, tabel IP demo, data nyata, dan JSON-serialisasi hasil tersimpan.
+- `test_scoring.py`: rumus, pembulatan, bukti skor kelipatan 1/11 (seluruh pasangan A,V; tanpa seri pembulatan), batas label, semua flag (termasuk simulasi tanpa sumber yang bisa dinilai, urutan, dedup), `assess()` untuk tiap status, tabel IP demo, data nyata, `isWhitelisted: null` dari respons asli, dan JSON-serialisasi hasil tersimpan.
 - `test_checks_scoring_api.py`: kontrak respons per IP demo, GET sama dengan POST, presisi penuh di DB, label dari nilai tersimpan lewat API, cek lama tiga-field, data nyata dengan waktu WIB, kegagalan sumber (401, 429 dengan `Retry-After`, timeout), audit tanpa evidence/key, key tidak bocor, input ditolak dan viewer tidak memanggil sumber, OpenAPI.
 - `test_iocs_simulasi.py`: guard MISP end-to-end dan kontrol positif.
+
+## Catatan untuk Tahap 3
+
+Ditambahkan di akhir Tahap 2 (dari known gap 9), bagian dari rencana Tahap 3:
+
+1. **Cache dan pembatas kuota hanya boleh dipanggil setelah `validate_ip` lolos, di dalam alur `collect_sources`; bukan di dependency FastAPI** (`get_sources` atau dependency baru). Dependency berjalan sebelum body diperiksa, jadi input yang ditolak (dan viewer yang akan mendapat 403) bisa mengakses cache atau menghabiskan kuota. Ini melanggar aturan CLAUDE.md: input yang ditolak tidak boleh memicu request keluar, akses cache, atau kuota. `get_sources` cukup membangun objek tanpa efek samping (tanpa request, tanpa baca/tulis cache, tanpa kuota).
+2. **Test yang wajib ditulis di Tahap 3** (cache dan limiter belum ada, jadi belum bisa ditulis sekarang): untuk setiap input yang ditolak (`PRIVATE`, `LOOPBACK`, `INVALID_FORMAT`, `IPV6_NOT_SUPPORTED`, dst.) dan untuk viewer (403), pakai spy pada cache dan limiter lalu pastikan **nol** pembacaan cache, **nol** penulisan cache, dan **nol** hitungan kuota; ditambah satu test bahwa membangun `get_sources()` tidak menyentuh keduanya. Lakukan uji mutasi: memindahkan akses cache/limiter ke dependency harus membuat test ini gagal. Pola yang sudah ada dan bisa ditiru: `test_input_ditolak_tidak_memanggil_sumber_yang_disuntikkan` dan `test_viewer_tidak_memanggil_sumber`.
+3. Tinjau known gap 11 (`except` di `collect_sources`) sebelum guard `SOURCES_MODE=live` dicabut.
 
 ## Known gaps
 
@@ -156,5 +167,6 @@ Kode:
 6. ~~Test `assess()` untuk status non-`OK_*` belum ada~~ **Selesai di Tahap 2**: `test_scoring.py` menguji bahwa `NO_RECORD`, `INSUFFICIENT_DATA`, `ERROR`, dan `SKIPPED` tidak menambah cakupan (Keputusan 6 rencana).
 7. ~~Belum ada pemakai `SourceResult` di luar test~~ **Selesai di Tahap 2**: `ip_checks.to_stored` (JSON, waktu UTC) dan skema respons `SourceResult` (waktu WIB).
 8. **Mode mock membuat semua cek baru ber-flag `SUMBER_SIMULASI` sehingga tidak ada cek yang bisa dikirim ke MISP lewat alur normal** sampai sumber live aktif (Tahap 3). Itu disengaja (Keputusan 10), tetapi demo MISP 4 Nov harus memakai cek bertanda data nyata atau menunggu Tahap 3. Test memakai adapter live di atas `MockTransport` untuk membuktikan cek tanpa flag tetap bisa dikirim.
-9. **`get_sources` dijalankan sebagai dependency sebelum body `POST /checks` diperiksa.** Pada mode mock itu hanya membuat objek, tanpa jaringan. Saat Tahap 3 menambah adapter live (klien HTTP, pembatas kuota), pembuatan objek tetap tidak boleh melakukan request; pemanggilan sumber hanya lewat `collect_sources` setelah validasi IP.
-10. **Pembulatan memakai `round()` Python (banker's/biner).** Nilai yang tepat di tengah (mis. `x.x5`) bisa dibulatkan ke genap atau ke arah representasi biner float. Dengan bobot dan skor bilangan bulat saat ini hanya selisih kecil dan tidak mengubah label (label memakai nilai asli), tetapi tim perlu tahu bila ingin pembulatan setengah-ke-atas.
+9. **`get_sources` dijalankan sebagai dependency sebelum body `POST /checks` diperiksa.** Pada mode mock itu hanya membuat objek, tanpa jaringan. Aturan untuk Tahap 3 ada di bagian "Catatan untuk Tahap 3": cache dan pembatas kuota tidak boleh disentuh di dependency.
+10. ~~Pembulatan memakai `round()` Python dan titik tengah bisa dibulatkan ke arah yang tidak terduga~~ **Ditutup dengan bukti (Tahap 2)**: `(30A + 25V) / 55 = (6A + 5V) / 11`, jadi skor selalu kelipatan 1/11 dan seri di titik tengah 1 desimal (`x.x5`) mustahil (`20(6A + 5V) = 22k + 11`: genap vs ganjil). `test_skor_kelipatan_sepelas_jadi_tidak_ada_seri_pembulatan_dan_label_stabil` memeriksa seluruh 101×101 pasangan A,V dan juga bahwa label dari nilai asli sama dengan label dari nilai yang dibulatkan. Akibatnya kasus 74,96 (tampil `75.0`, label `TINGGI`) adalah **pengaman desain** (label dari nilai tersimpan) yang tidak terjadi dari input nyata dengan rumus ini. Bukti ini gugur bila bobot atau jumlah sumber berubah (mutasi bobot 30→31 menggagalkan test), jadi test itu harus ikut ditinjau saat tim mengubah rumus.
+11. **Tanpa `except` di `collect_sources`, bug di satu adapter membuat seluruh `POST /checks` menjadi 500**, padahal Bab 5 menyatakan hasil sumber lain tetap ditampilkan. Ini kompromi sadar di Tahap 2 (keputusan 5): adapter sudah mengubah semua kegagalan httpx menjadi `ERROR`, dan `ValueError` dari `require_public_ip` berarti input yang ditolak lolos ke adapter sehingga harus gagal keras. Tetapi exception lain (bug parsing, `KeyError`, dll.) ikut membatalkan cek, dan tidak ada baris cek maupun audit yang tersimpan. **Tinjau ulang sebelum mode live**: opsi yang perlu diputuskan adalah menangkap exception per sumber (kecuali kelas yang menandai input tidak valid), mencatat hanya nama kelasnya di log, menyimpan sumber itu sebagai `ERROR` + `UPSTREAM`, dan membiarkan sumber lain tetap tampil.
