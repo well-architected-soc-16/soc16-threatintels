@@ -94,3 +94,33 @@ def test_start_dengan_env_example_dan_jwt_acak_valid_normal(example_env):
     proc = _start({**example_env, "JWT_SECRET_KEY": secrets.token_hex(32)})
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+SOURCE_VARS = [
+    "SOURCES_MODE",
+    "ABUSEIPDB_API_KEY_FILE",
+    "VIRUSTOTAL_API_KEY_FILE",
+    "SOURCE_TIMEOUT_SECONDS",
+    "ABUSEIPDB_MAX_AGE_DAYS",
+    "ABUSEIPDB_DAILY_LIMIT",
+    "VT_DAILY_LIMIT",
+    "VT_PER_MINUTE_LIMIT",
+    "CACHE_TTL_OK_SIGNAL_HOURS",
+    "CACHE_TTL_OK_NO_SIGNAL_HOURS",
+    "CACHE_TTL_NO_RECORD_HOURS",
+]
+
+
+def test_variabel_sumber_ada_di_contoh_dan_dikenali_settings(example_env):
+    # extra="ignore" membuat variabel yang salah ketik lolos diam-diam; periksa kedua arah.
+    for var in SOURCE_VARS:
+        assert var in example_env, f"{var} tidak ada di .env.example"
+        assert var.lower() in Settings.model_fields, f"{var} tidak dikenali Settings"
+
+
+def test_contoh_memakai_mode_sumber_mock_dan_key_hanya_berupa_path(example_env):
+    assert example_env["SOURCES_MODE"] == "mock"
+    assert example_env["ABUSEIPDB_API_KEY_FILE"] == "/run/secrets/abuseipdb_api_key"
+    assert example_env["VIRUSTOTAL_API_KEY_FILE"] == "/run/secrets/virustotal_api_key"
+    # Tidak boleh ada variabel yang menampung key langsung (hanya `*_FILE`).
+    assert not [k for k in example_env if "API_KEY" in k and not k.endswith("_FILE")]
