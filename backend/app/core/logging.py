@@ -33,3 +33,7 @@ def setup_logging(level: str = "INFO") -> None:
         lg.setLevel(level.upper())
     # Log akses uvicorn memuat path/query; pakai logger aplikasi sendiri.
     logging.getLogger("uvicorn.access").disabled = True
+    # httpx mencetak URL tiap request pada level INFO; httpcore sangat rinci pada DEBUG.
+    # Ditetapkan eksplisit agar LOG_LEVEL=DEBUG tidak ikut menurunkannya.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)

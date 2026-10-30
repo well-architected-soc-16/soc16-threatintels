@@ -26,8 +26,14 @@ services:
     env_file: .env
     environment:
       DB_PASSWORD_FILE: /run/secrets/db_password
+      ABUSEIPDB_API_KEY_FILE: /run/secrets/abuseipdb_api_key
+      VIRUSTOTAL_API_KEY_FILE: /run/secrets/virustotal_api_key
     secrets:
       - db_password
+      # API key sumber reputasi hanya untuk api (bukan db). File sumbernya harus ada agar
+      # `docker compose up` jalan, walau mode mock (boleh kosong): lihat README.
+      - abuseipdb_api_key
+      - virustotal_api_key
     volumes:
       # KHUSUS DEV/TEST: dibaca tests/test_env_example.py. Jangan disalin ke compose
       # produksi (soc-ir): di sana tidak ada alasan membawa .env.example ke kontainer.
@@ -55,6 +61,10 @@ services:
 secrets:
   db_password:
     file: ./secrets/db_password.txt
+  abuseipdb_api_key:
+    file: ./secrets/abuseipdb_api_key.txt
+  virustotal_api_key:
+    file: ./secrets/virustotal_api_key.txt
 
 volumes:
   db_data:

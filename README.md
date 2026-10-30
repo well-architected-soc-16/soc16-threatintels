@@ -100,16 +100,26 @@ end
 
 Nilai contoh di `.env.example` (`ganti-...`) **harus diganti**, karena nilainya diketahui semua orang (repository ini public). Aplikasi menolak start jika `JWT_SECRET_KEY` berawalan `ganti-` (tanpa membedakan huruf besar/kecil) atau kurang dari 32 byte, dan seed menolak password yang berawalan `ganti-`; pesan error hanya menyebut nama variabelnya, bukan nilainya. Akibatnya, menyalin `.env.example` tanpa mengisinya membuat kontainer `api` berhenti saat start. Password akun awal dapat dilihat di `.env` (baris `SEED_*_PASSWORD`); simpan di tempat yang aman atau ganti dengan password pilihan sendiri (minimal 12 karakter). Variabel lain dijelaskan di [Konfigurasi](#konfigurasi).
 
-**2. Buat password database.** Password Postgres dibaca dari file (Docker secret), bukan dari variabel lingkungan:
+**2. Buat file secret.** Password Postgres dan API key sumber reputasi dibaca dari file (Docker secret), bukan dari variabel lingkungan:
 
 ```fish
 mkdir -p secrets
 openssl rand -hex 24 > secrets/db_password.txt
+touch secrets/abuseipdb_api_key.txt secrets/virustotal_api_key.txt
 chmod 700 secrets
-chmod 644 secrets/db_password.txt
+chmod 644 secrets/*.txt
 ```
 
-File perlu dapat dibaca oleh proses di dalam kontainer (itu sebabnya `644`), sedangkan foldernya tetap tertutup untuk pengguna lain.
+File perlu dapat dibaca oleh proses di dalam kontainer (itu sebabnya `644`; kontainer `api` berjalan sebagai pengguna non-root), sedangkan foldernya tetap tertutup untuk pengguna lain.
+
+Kedua file API key **harus ada** agar `docker compose up` berjalan, tetapi pada `SOURCES_MODE=mock` (default) isinya tidak dipakai, jadi file kosong dari `touch` sudah cukup. Mode `live` belum didukung (aplikasi menolak start). Nanti, saat mode live tersedia, isi key tanpa menampilkannya di layar atau riwayat shell, jangan menempelkannya ke chat atau issue:
+
+```fish
+read -s key; printf '%s' $key > secrets/abuseipdb_api_key.txt; set -e key
+read -s key; printf '%s' $key > secrets/virustotal_api_key.txt; set -e key
+```
+
+Satu file berisi satu key saja (tanpa spasi atau baris tambahan).
 
 **3. Jalankan.**
 
@@ -208,7 +218,7 @@ Role dan status akun dibaca ulang dari database di setiap request, jadi perubaha
 
 ### Konfigurasi
 
-Dibaca dari `.env` (lihat `.env.example`). Password database tidak ada di sini: dibaca dari `secrets/db_password.txt`.
+Dibaca dari `.env` (lihat `.env.example`). Password database dan API key sumber reputasi tidak ada di sini: dibaca dari `secrets/db_password.txt`, `secrets/abuseipdb_api_key.txt`, dan `secrets/virustotal_api_key.txt`.
 
 | Variabel | Default | Keterangan |
 |---|---|---|
@@ -219,6 +229,12 @@ Dibaca dari `.env` (lihat `.env.example`). Password database tidak ada di sini: 
 | `JWT_SECRET_KEY` | (wajib diisi) | Kunci penanda tangan JWT; acak, minimal 32 **byte**, tidak boleh berawalan `ganti-`. Aplikasi menolak start jika tidak terpenuhi |
 | `JWT_EXPIRE_MINUTES` | `30` | Masa berlaku token |
 | `MISP_MODE` | `mock` | `mock` tidak menghubungi apa pun; `live` belum diimplementasikan dan menjawab 501 |
+| `SOURCES_MODE` | `mock` | Satu saklar untuk AbuseIPDB dan VirusTotal. `mock` memakai data simulasi (berflag `SUMBER_SIMULASI`) tanpa request keluar. `live` **belum didukung**: aplikasi menolak start (sementara, sampai Tahap 3 TASK-02) |
+| `ABUSEIPDB_API_KEY_FILE`, `VIRUSTOTAL_API_KEY_FILE` | `/run/secrets/abuseipdb_api_key`, `/run/secrets/virustotal_api_key` | Lokasi file key di dalam kontainer; jangan diubah untuk Compose. Pada `live` file wajib ada, tidak kosong, dan bukan nilai contoh (`ganti-...`); pesan galat hanya menyebut nama variabel |
+| `SOURCE_TIMEOUT_SECONDS` | `10` | Batas waktu request per sumber |
+| `ABUSEIPDB_MAX_AGE_DAYS` | `30` | `maxAgeInDays` untuk AbuseIPDB (1-365) |
+| `ABUSEIPDB_DAILY_LIMIT`, `VT_DAILY_LIMIT`, `VT_PER_MINUTE_LIMIT` | `1000`, `500`, `4` | Kuota akun tim, dipakai bersama semua user (satu API key per sumber) |
+| `CACHE_TTL_OK_SIGNAL_HOURS`, `CACHE_TTL_OK_NO_SIGNAL_HOURS`, `CACHE_TTL_NO_RECORD_HOURS` | `6`, `24`, `1` | TTL cache per status sumber; nilai percobaan, belum disepakati tim |
 | `SEED_*_USER`, `SEED_*_PASSWORD` | lihat `.env.example` | Akun awal untuk `scripts.seed_users`; password minimal 12 karakter dan tidak boleh berawalan `ganti-` |
 
 ### Menjalankan test dan lint
