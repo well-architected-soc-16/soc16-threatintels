@@ -5,7 +5,11 @@ Mode mock (default test) memakai `get_sources` asli; mode live memakai adapter a
 `MockTransport`, dibungkus `SourceGateway` asli di atas database test.
 """
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.main import app
@@ -250,3 +254,34 @@ def test_kontrol_spy_mendeteksi_akses_pada_ip_valid(client, make_user, login, sp
     assert "app.services.sources.cache.lookup" in spies
     assert "app.services.sources.quota.reserve" in spies
     assert "app.services.sources.cache.store" in spies
+
+
+# --- paralel lewat API (router + dependency + gerbang bersama) ----------------------------------------------
+
+
+def test_10_post_checks_paralel_tidak_menembus_batas_4_per_menit_vt(
+    client, make_user, login, use_live
+):
+    make_user("analyst", Role.ANALYST)
+    headers = login("analyst")  # login (DB) sebelum thread berjalan
+    abuse_seen, vt_seen = use_live()
+    ips = [f"20.0.0.{n}" for n in range(1, 11)]
+    barrier = threading.Barrier(len(ips))
+
+    def one(ip):
+        barrier.wait(timeout=10)
+        resp = TestClient(app).post(CHECKS, json={"ip": ip}, headers=headers)
+        return resp.status_code, resp.json()
+
+    with ThreadPoolExecutor(max_workers=len(ips)) as pool:
+        outcomes = list(pool.map(one, ips))
+
+    assert [code for code, _ in outcomes] == [201] * 10
+    vt_status = [body["sources"][1]["status"] for _, body in outcomes]
+    assert vt_status.count("OK_NO_SIGNAL") == 4  # fixture nyata VirusTotal: V=0
+    assert vt_status.count("SKIPPED") == 6
+    skipped = [b for _, b in outcomes if b["sources"][1]["status"] == "SKIPPED"]
+    assert {b["sources"][1]["reason"] for b in skipped} == {"QUOTA_INTERNAL"}
+    assert {b["assessment_status"] for b in skipped} == {"DATA_TERBATAS"}
+    assert len(vt_seen) == 4  # request keluar ke VirusTotal tepat 4
+    assert len(abuse_seen) == 10  # AbuseIPDB tidak terbatasi kuota VirusTotal

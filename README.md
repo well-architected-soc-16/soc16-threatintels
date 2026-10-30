@@ -293,10 +293,11 @@ backend/
     main.py            aplikasi FastAPI dan pendaftaran router
     core/              config, security (JWT, hash), deps (autentikasi, RBAC), logging, timeutil
     db/                base dan session SQLAlchemy
-    models/            users, audit_logs, ip_checks, ioc_submissions
+    models/            users, audit_logs, ip_checks, ioc_submissions, source_cache, source_calls
     schemas/           skema Pydantic
     routers/           health, auth, admin, checks, iocs
-    services/          audit, ip_validation, ip_checks, misp/ (Protocol, mock, kerangka live)
+    services/          audit, ip_validation, ip_checks, scoring, misp/ (Protocol, mock, kerangka live),
+                       sources/ (adapter AbuseIPDB dan VirusTotal, mock, cache, quota, gateway, factory)
   alembic/             migrasi database
   scripts/             entrypoint.sh, seed_users.py
   tests/
