@@ -88,7 +88,7 @@ touch secrets/abuseipdb_api_key.txt secrets/virustotal_api_key.txt
 # (opsional, untuk Tahap 3/4) isi dengan key dari Bitwarden tanpa menampilkannya:
 #   read -s key; printf '%s' $key > secrets/abuseipdb_api_key.txt; set -e key
 #   read -s key; printf '%s' $key > secrets/virustotal_api_key.txt; set -e key
-chmod 600 secrets/*.txt
+chmod 644 secrets/*.txt   # bukan 600: kontainer api (uid 10001) harus bisa membaca bind mount; perlindungan ada di folder secrets/ (700)
 git status                                   # secrets/ TIDAK muncul
 docker compose up -d --build && docker compose ps
 docker compose exec api python -m pytest -q -p no:cacheprovider   # tetap hijau

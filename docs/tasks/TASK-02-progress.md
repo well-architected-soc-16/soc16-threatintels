@@ -30,7 +30,7 @@ Dikerjakan di branch `feat/task-02-tahap-0-konfigurasi-sumber`. Tidak ada peruba
 
 ### Keputusan dan penyimpangan dari rencana
 
-1. **`chmod 644`, bukan `chmod 600 secrets/*.txt`** seperti di "Cek selesai" rencana. Kontainer `api` berjalan sebagai uid 10001 dan membaca file secret lewat bind mount yang mempertahankan pemilik dan mode dari host. File bermode 600 milik uid host tidak terbaca olehnya, dan perintah itu juga akan merusak `db_password.txt` yang sudah ada. Folder `secrets/` tetap `700`. Sejalan dengan README yang sudah ada. Teks "Cek selesai" di file rencana belum diubah (lihat known gap 2).
+1. **`chmod 644`, bukan `chmod 600 secrets/*.txt`** seperti di "Cek selesai" rencana. Kontainer `api` berjalan sebagai uid 10001 dan membaca file secret lewat bind mount yang mempertahankan pemilik dan mode dari host. File bermode 600 milik uid host tidak terbaca olehnya, dan perintah itu juga akan merusak `db_password.txt` yang sudah ada. Folder `secrets/` tetap `700`. Sejalan dengan README yang sudah ada. Teks "Cek selesai" di file rencana sudah dikoreksi menjadi `644` (lihat known gap 2).
 2. **Validasi tambahan: isi file harus satu key** (ASCII yang tampak, tanpa spasi atau baris baru). Tidak tertulis di rencana. Alasannya: file berisi dua baris membuat httpx menolak header, dan pesan galat httpx memuat nilai header (yaitu key). Validasi di sini mencegah key sampai ke log di Tahap 1/3. Mudah dilepas bila tim tidak setuju.
 3. **Pesan galat tidak memuat path file**, hanya nama variabel. Path memang bukan rahasia, tetapi aturan CLAUDE.md menyebut hanya nama variabel. `UnicodeDecodeError` juga sengaja tidak disambung (`from None`) karena memuat byte yang gagal didekode; ada test-nya.
 4. **Path file key punya default** (`/run/secrets/...`), tidak wajib diisi. Alasan: konstruksi `Settings` di test yang sudah ada tidak perlu diubah, dan nilainya sama dengan yang dipasang compose. Compose tetap mengisi `*_FILE` di `environment`, meniru `DB_PASSWORD_FILE`.
@@ -54,6 +54,6 @@ Dikerjakan di branch `feat/task-02-tahap-0-konfigurasi-sumber`. Tidak ada peruba
 ## Known gaps
 
 1. **Pengaturan awal bertambah dua file.** `docker compose up` gagal bila `secrets/abuseipdb_api_key.txt` atau `secrets/virustotal_api_key.txt` tidak ada (Keputusan 14). Developer yang sudah punya stack harus menjalankan `touch` sekali setelah pull. README sudah menjelaskan; CI nanti harus membuat kedua file itu juga.
-2. **Teks "Cek selesai" Tahap 0 di file rencana masih memuat `chmod 600 secrets/*.txt`**, yang salah untuk Docker secret berbentuk bind mount (lihat keputusan 1). Perlu dikoreksi menjadi `644` di PR terpisah atau sekalian di PR Tahap berikutnya.
+2. ~~Teks "Cek selesai" Tahap 0 di file rencana memuat `chmod 600 secrets/*.txt`~~ **Selesai**: dikoreksi menjadi `chmod 644` dengan alasan singkat (lihat keputusan 1).
 3. **Uji start `live` dengan file key valid lewat kontainer** baru bisa dilakukan setelah guard dicabut (Tahap 3); sebelum itu hanya dibuktikan lewat test subprocess.
 4. **Peringatan deprecation Starlette `TestClient`** ("install `httpx2`") muncul di ringkasan pytest. Tidak diselidiki di tahap ini; belum dicek apakah sudah ada sebelum Tahap 0.
