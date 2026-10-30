@@ -61,6 +61,7 @@ def test_skipped_dengan_alasan_diterima_dan_tanpa_skor(reason):
         SourceReason.TIMEOUT,
         SourceReason.UPSTREAM,
         SourceReason.INVALID_RESPONSE,
+        SourceReason.INTERNAL_ERROR,
     ],
 )
 def test_error_dengan_alasan_diterima(reason):

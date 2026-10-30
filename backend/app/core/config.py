@@ -69,8 +69,8 @@ class Settings(BaseSettings):
             )
         return value
 
-    # Urutan definisi = urutan eksekusi: (a) file key dulu, baru (b) guard mode live.
-    # Pesan keduanya hanya menyebut nama variabel, tidak pernah path atau isi file.
+    # Mode live wajib punya kedua file key yang valid. Pesan hanya menyebut nama variabel,
+    # tidak pernah path atau isi file.
     @model_validator(mode="after")
     def _file_key_valid_jika_mode_live(self) -> Self:
         if self.sources_mode != "live":
@@ -86,17 +86,6 @@ class Settings(BaseSettings):
                 problems.append(str(exc))
         if problems:
             raise ValueError("SOURCES_MODE=live: " + "; ".join(problems))
-        return self
-
-    # SEMENTARA: dicabut di Tahap 3 TASK-02, saat pembatas kuota sudah ada. Sebelum itu,
-    # menyambungkan sumber live ke POST /checks (Tahap 2) berarti memanggil API tanpa limiter.
-    @model_validator(mode="after")
-    def _tolak_mode_live_sementara(self) -> Self:
-        if self.sources_mode == "live":
-            raise ValueError(
-                "SOURCES_MODE=live belum didukung (menunggu pembatas kuota, Tahap 3 TASK-02); "
-                "gunakan SOURCES_MODE=mock"
-            )
         return self
 
     @property

@@ -4,13 +4,22 @@ Pemanggil wajib memvalidasi IP lebih dulu (`validate_ip`); input yang ditolak ti
 ke adapter. Rumus skor, label, dan flag ada di `app.services.scoring`.
 """
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from app.services import scoring
-from app.services.sources.base import SCORED_STATUSES, ReputationSource, SourceResult
+from app.services.sources._common import error_result, utc_now
+from app.services.sources.base import (
+    SCORED_STATUSES,
+    ReputationSource,
+    SourceReason,
+    SourceResult,
+)
+
+logger = logging.getLogger(__name__)
 
 SCORING_VERSION = scoring.SCORING_VERSION
 
@@ -25,12 +34,34 @@ class Assessment:
 
 
 def collect_sources(ip: str, sources: Sequence[ReputationSource]) -> list[SourceResult]:
-    """Seam ke adapter. Berurutan (Keputusan 5); kegagalan sumber sudah menjadi hasil ERROR di adapter.
+    """Seam ke adapter. Berurutan (Keputusan 5); kegagalan layanan luar sudah menjadi hasil ERROR
+    di adapter.
 
-    Exception lain (mis. `ValueError` karena IP tidak valid) sengaja tidak ditangkap: itu berarti
-    input yang ditolak lolos ke adapter, dan harus gagal keras, bukan dicatat sebagai `UPSTREAM`.
+    Isolasi per sumber (known gap 11): exception tak terduga pada satu sumber, yaitu bug di sisi
+    kita, menjadi `ERROR` + `INTERNAL_ERROR` untuk sumber itu saja dan sumber lain tetap tampil.
+    Log level ERROR hanya memuat nama sumber dan nama kelas exception, tanpa pesan dan tanpa
+    traceback (pesan bisa memuat data sensitif). Hasil itu tidak masuk cache (ia dibuat di luar
+    gerbang) dan reservasi kuota yang sudah dibuat tetap dihitung.
+
+    `ValueError` sengaja tetap dilempar keras: ia berarti input yang ditolak lolos ke adapter
+    (`require_public_ip`), bukan kegagalan satu sumber.
     """
-    return [source.fetch(ip) for source in sources]
+    results: list[SourceResult] = []
+    for source in sources:
+        try:
+            results.append(source.fetch(ip))
+        except ValueError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "sumber %s gagal tak terduga: %s", source.name, type(exc).__name__
+            )
+            results.append(
+                error_result(
+                    source.name, SourceReason.INTERNAL_ERROR, retrieved_at=utc_now()
+                )
+            )
+    return results
 
 
 def assess(results: Sequence[SourceResult]) -> Assessment:

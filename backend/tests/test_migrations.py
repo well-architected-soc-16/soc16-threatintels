@@ -11,7 +11,14 @@ from alembic import command
 from app.core.config import get_settings
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-APP_TABLES = {"users", "audit_logs", "ip_checks", "ioc_submissions"}
+APP_TABLES = {
+    "users",
+    "audit_logs",
+    "ip_checks",
+    "ioc_submissions",
+    "source_cache",
+    "source_calls",
+}
 
 
 def _config(connection) -> Config:
