@@ -138,7 +138,10 @@ def test_hasil_per_sumber_membawa_field_tahap_1(client, make_user, login):
     assert abuse["evidence_summary"]["simulasi"] is True
     assert abuse["flags"] == vt["flags"] == ["SUMBER_SIMULASI"]
     assert abuse["retrieved_at"].endswith("+07:00")
-    assert abuse["from_cache"] is False and abuse["expires_at"] is None
+    # Hasil baru (bukan dari cache), tetapi sudah punya batas kedaluwarsa karena kini di-cache:
+    # OK_SIGNAL berlaku 6 jam (TTL percobaan) sejak diambil.
+    assert abuse["from_cache"] is False
+    assert abuse["expires_at"].endswith("+07:00")
     assert abuse["http_status"] is None  # mock bukan panggilan HTTP
 
 

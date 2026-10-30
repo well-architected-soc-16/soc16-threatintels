@@ -29,14 +29,14 @@ Tools ini mendukung proses analisis SOC. SIEM, pengelolaan kasus insiden, dan re
 | Fitur | Hasil yang dituju | Status |
 |---|---|---|
 | Pemeriksaan reputasi IP | Pengguna memasukkan alamat IP dan memperoleh informasi reputasinya | Sebagian: validasi input dan penyimpanan hasil sudah ada; data reputasi belum |
-| Agregasi sumber eksternal | Hasil dari sumber yang dipilih disajikan dalam format yang konsisten | Sebagian (adapter dan mode mock sudah ada; sumber live belum aktif) |
+| Agregasi sumber eksternal | Hasil dari sumber yang dipilih disajikan dalam format yang konsisten | Sebagian (adapter, cache, dan kuota sudah ada; mode live belum diuji dengan API nyata) |
 | Penyajian hasil | Hasil menampilkan sumber, waktu pemeriksaan, dan konteks reputasi yang tersedia | Sebagian: sumber, status, dan waktu tampil; skor belum dihitung |
 | REST API | Pemeriksaan dapat diakses melalui endpoint yang terdokumentasi | Tersedia (lihat [Daftar Endpoint](#daftar-endpoint)) |
 | Dokumentasi Swagger | Endpoint, parameter, respons, dan kesalahan dapat diperiksa dan diuji | Tersedia di `/docs`, termasuk respons gagal |
 | Frontend web | Pengguna dapat melakukan pemeriksaan melalui browser | Direncanakan |
 | Integrasi MISP | Indikator hasil analisis dapat dikirim ke MISP | Sebagian: mode mock saja; MISP asli belum |
 
-Sumber v1 adalah AbuseIPDB dan VirusTotal; adapter, skor gabungan, label, dan flag sudah ada (mode mock); sumber live menunggu cache dan pembatas kuota. Perbedaan penilaian antar-sumber perlu tetap terlihat agar hasil dapat ditelusuri.
+Sumber v1 adalah AbuseIPDB dan VirusTotal; adapter, skor gabungan, label, dan flag sudah ada (mode mock); cache dan pembatas kuota sudah ada, sumber live belum diuji dengan API nyata. Perbedaan penilaian antar-sumber perlu tetap terlihat agar hasil dapat ditelusuri.
 
 ## Hubungan dengan SOC
 
@@ -60,7 +60,7 @@ Panduan RKS301 KM-5 mensyaratkan minimal satu sumber TI eksternal benar-benar di
 | Autentikasi | OAuth2 password flow + JWT (PyJWT), hash password argon2 (pwdlib) | Berjalan (lokal) |
 | Dokumentasi API | Swagger/OpenAPI di `/docs` | Tersedia |
 | Frontend | Vite + React + TypeScript | Belum dimulai |
-| Sumber reputasi | AbuseIPDB dan VirusTotal lewat adapter | Adapter dan mode mock sudah ada; mode live belum aktif |
+| Sumber reputasi | AbuseIPDB dan VirusTotal lewat adapter | Adapter, cache, kuota, dan mode mock ada; mode live belum diuji dengan API nyata (Tahap 4) |
 | Integrasi indikator | MISP | Mode mock; MISP asli belum |
 | Penyimpanan data | PostgreSQL 18 (psycopg 3) di kontainer | Berjalan (lokal) |
 | CI/CD | GitHub Actions dengan pemeriksaan keamanan dan build | Belum dibuat |
@@ -112,7 +112,7 @@ chmod 644 secrets/*.txt
 
 File perlu dapat dibaca oleh proses di dalam kontainer (itu sebabnya `644`; kontainer `api` berjalan sebagai pengguna non-root), sedangkan foldernya tetap tertutup untuk pengguna lain.
 
-Kedua file API key **harus ada** agar `docker compose up` berjalan, tetapi pada `SOURCES_MODE=mock` (default) isinya tidak dipakai, jadi file kosong dari `touch` sudah cukup. Mode `live` belum didukung (aplikasi menolak start). Nanti, saat mode live tersedia, isi key tanpa menampilkannya di layar atau riwayat shell, jangan menempelkannya ke chat atau issue:
+Kedua file API key **harus ada** agar `docker compose up` berjalan, tetapi pada `SOURCES_MODE=mock` (default) isinya tidak dipakai, jadi file kosong dari `touch` sudah cukup. Mode `live` mewajibkan kedua file berisi satu API key yang valid; bila tidak, aplikasi menolak start dan pesannya hanya menyebut nama variabel. Isi key tanpa menampilkannya di layar atau riwayat shell, jangan menempelkannya ke chat atau issue:
 
 ```fish
 read -s key; printf '%s' $key > secrets/abuseipdb_api_key.txt; set -e key
@@ -191,7 +191,7 @@ IP yang ditolak (privat, loopback, link-local, multicast, dokumentasi, reserved,
 
 ### Sumber reputasi dan mode simulasi
 
-Adapter AbuseIPDB dan VirusTotal ada di `backend/app/services/sources/`. `POST /checks` memanggil adapter lewat `SOURCES_MODE`; `SOURCES_MODE=live` masih ditolak aplikasi (menunggu pembatas kuota, Tahap 3 TASK-02).
+Adapter AbuseIPDB dan VirusTotal ada di `backend/app/services/sources/`. `POST /checks` memanggil adapter lewat `SOURCES_MODE`; `SOURCES_MODE=live` memakai adapter asli lewat cache dan pembatas kuota (lihat bagian berikutnya).
 
 Pada `SOURCES_MODE=mock`, adapter mock menjawab tanpa jaringan dan **semua hasilnya fiktif**. Setiap hasil, termasuk yang berstatus `ERROR`, diberi flag `SUMBER_SIMULASI` dan `"simulasi": true` di bukti. Skenario dipilih dari tabel IP demo berikut (IP resolver publik terkenal, supaya hasil "berbahaya" yang jelas palsu tidak mencoreng pihak kecil). IP di luar tabel mendapat hasil bawaan: kedua sumber `OK_NO_SIGNAL` dengan skor 0.
 
@@ -206,6 +206,16 @@ Pada `SOURCES_MODE=mock`, adapter mock menjawab tanpa jaringan dan **semua hasil
 | `208.67.222.222` | 0 | `INSUFFICIENT_DATA` (semua `timeout`) |
 
 > **Peringatan.** Hasil untuk IP-IP di atas **fiktif**; itu bukan reputasi sebenarnya dari resolver tersebut. Hasil simulasi **tidak boleh** dimasukkan ke MISP atau blocklist karena bukan data nyata. Saat demo, sebut hasil mode mock sebagai "simulasi".
+
+#### Cache dan kuota (mode live)
+
+Setiap sumber melewati cache lalu pembatas kuota sebelum request keluar. Keduanya bekerja **per sumber** dan dipakai **bersama semua user** (satu API key per sumber):
+
+- **Cache:** hasil `OK_SIGNAL` berlaku 6 jam, `OK_NO_SIGNAL` 24 jam, `NO_RECORD` 1 jam (nilai percobaan, belum disepakati tim; bisa diatur lewat `CACHE_TTL_*`). Cek IP yang sama berikutnya memakai cache (`from_cache: true`, `retrieved_at` tetap waktu pengambilan asli) tanpa request dan tanpa memakai kuota. `ERROR`, `INSUFFICIENT_DATA`, dan `SKIPPED` tidak pernah di-cache. Cache mode `mock` dan `live` dipisah: mode live tidak pernah membaca data simulasi.
+- **Kuota:** VirusTotal 4 per menit dan 500 per hari (reset 00:00 UTC); AbuseIPDB 1.000 per hari (reset mengikuti header `X-RateLimit-Reset` bila ada, 00:00 UTC bila tidak). Bila batas habis, sumber itu berstatus `SKIPPED` dengan alasan `QUOTA_INTERNAL`, tanpa request keluar, dan sumber lain tetap berjalan (`assessment_status: DATA_TERBATAS`). Setelah respons 429, sumber itu di-skip sesuai `Retry-After` (60 detik bila tidak ada).
+- **Peringatan kuota VirusTotal:** akun gratis hanya 4 permintaan per menit. Cek IP **baru** ke-5 dalam semenit akan melewati VirusTotal. Panggilan mode `mock` dicatat tetapi tidak pernah dihitung ke kuota ini.
+- Setiap request keluar dicatat di tabel `source_calls` (sumber, mode, waktu, status HTTP, hasil, durasi) tanpa key, header, maupun body.
+- Kegagalan tak terduga di satu sumber (bug) menjadi `ERROR` dengan alasan `INTERNAL_ERROR` untuk sumber itu saja; sumber lain tetap tampil.
 
 ### Daftar Endpoint
 
@@ -253,7 +263,7 @@ Dibaca dari `.env` (lihat `.env.example`). Password database dan API key sumber 
 | `JWT_SECRET_KEY` | (wajib diisi) | Kunci penanda tangan JWT; acak, minimal 32 **byte**, tidak boleh berawalan `ganti-`. Aplikasi menolak start jika tidak terpenuhi |
 | `JWT_EXPIRE_MINUTES` | `30` | Masa berlaku token |
 | `MISP_MODE` | `mock` | `mock` tidak menghubungi apa pun; `live` belum diimplementasikan dan menjawab 501 |
-| `SOURCES_MODE` | `mock` | Satu saklar untuk AbuseIPDB dan VirusTotal. `mock` memakai data simulasi (berflag `SUMBER_SIMULASI`) tanpa request keluar. `live` **belum didukung**: aplikasi menolak start (sementara, sampai Tahap 3 TASK-02) |
+| `SOURCES_MODE` | `mock` | Satu saklar untuk AbuseIPDB dan VirusTotal. `mock` memakai data simulasi (berflag `SUMBER_SIMULASI`) tanpa request keluar. `live` memakai AbuseIPDB dan VirusTotal asli (butuh kedua file key valid, lihat bagian cache dan kuota) |
 | `ABUSEIPDB_API_KEY_FILE`, `VIRUSTOTAL_API_KEY_FILE` | `/run/secrets/abuseipdb_api_key`, `/run/secrets/virustotal_api_key` | Lokasi file key di dalam kontainer; jangan diubah untuk Compose. Pada `live` file wajib ada, tidak kosong, dan bukan nilai contoh (`ganti-...`); pesan galat hanya menyebut nama variabel |
 | `SOURCE_TIMEOUT_SECONDS` | `10` | Batas waktu request per sumber |
 | `ABUSEIPDB_MAX_AGE_DAYS` | `30` | `maxAgeInDays` untuk AbuseIPDB (1-365) |
@@ -283,10 +293,11 @@ backend/
     main.py            aplikasi FastAPI dan pendaftaran router
     core/              config, security (JWT, hash), deps (autentikasi, RBAC), logging, timeutil
     db/                base dan session SQLAlchemy
-    models/            users, audit_logs, ip_checks, ioc_submissions
+    models/            users, audit_logs, ip_checks, ioc_submissions, source_cache, source_calls
     schemas/           skema Pydantic
     routers/           health, auth, admin, checks, iocs
-    services/          audit, ip_validation, ip_checks, misp/ (Protocol, mock, kerangka live)
+    services/          audit, ip_validation, ip_checks, scoring, misp/ (Protocol, mock, kerangka live),
+                       sources/ (adapter AbuseIPDB dan VirusTotal, mock, cache, quota, gateway, factory)
   alembic/             migrasi database
   scripts/             entrypoint.sh, seed_users.py
   tests/

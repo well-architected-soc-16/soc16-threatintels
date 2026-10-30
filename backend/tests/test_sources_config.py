@@ -1,9 +1,8 @@
-"""Konfigurasi sumber reputasi (TASK-02 Tahap 0): default, rentang, file API key, dan guard live.
+"""Konfigurasi sumber reputasi (TASK-02 Tahap 0 dan 3): default, rentang, file API key, mode live.
 
-Dua hal dipisah sengaja (lihat rencana):
-- (a) `load_api_key`: validasi file key, dites langsung tanpa lewat `SOURCES_MODE`;
-- (b) guard `SOURCES_MODE=live` "belum didukung", dites lewat `Settings` dan start nyata.
-Guard (b) dicabut di Tahap 3; hanya test di bagian (b) yang ikut berubah saat itu.
+- `load_api_key`: validasi file key, dites langsung tanpa lewat `SOURCES_MODE`;
+- mode live: file key hilang/kosong/placeholder gagal start dan hanya menyebut nama variabel;
+  file key valid diterima. Guard "belum didukung" (Tahap 0) dicabut di Tahap 3.
 """
 
 import os
@@ -218,7 +217,7 @@ def test_mode_mock_menerima_file_key_hilang_kosong_atau_placeholder(tmp_path):
     assert s.sources_mode == "mock"
 
 
-# --- Mode live: validasi file key (a) lebih dulu dari guard (b) -----------
+# --- Mode live: validasi file key --------------------------------------------
 
 
 def _live(tmp_path, abuse: str | None, vt: str | None) -> Settings:
@@ -252,8 +251,6 @@ def test_live_file_key_bermasalah_menyebut_hanya_variabel_yang_bermasalah(
     text = _rendered(exc)
     assert bermasalah in text
     assert aman not in text
-    # (a) gagal lebih dulu, jadi guard (b) tidak tercapai.
-    assert "belum didukung" not in text
     assert "KEY-UJI-RAHASIA" not in text
 
 
@@ -265,16 +262,15 @@ def test_live_kedua_file_bermasalah_dilaporkan_bersamaan(tmp_path):
     assert VT_VAR in str(exc.value)
 
 
-# --- (b) Guard sementara: live "belum didukung" ---------------------------
+# --- Mode live dengan file key valid diterima (guard sementara dicabut di Tahap 3) -----
 
 
-def test_live_dengan_file_key_valid_ditolak_belum_didukung(tmp_path):
-    with pytest.raises(ValidationError, match="belum didukung") as exc:
-        _live(tmp_path, LEAKY_KEY, LEAKY_KEY + "2")
+def test_live_dengan_file_key_valid_diterima(tmp_path):
+    s = _live(tmp_path, LEAKY_KEY, LEAKY_KEY + "2")
 
-    text = _rendered(exc)
-    assert "SOURCES_MODE" in text
-    assert "KEY-UJI-RAHASIA" not in text  # isi key tidak bocor walau file valid
+    assert s.sources_mode == "live"
+    assert s.abuseipdb_api_key.get_secret_value() == LEAKY_KEY
+    assert LEAKY_KEY not in repr(s)  # key tidak ikut tercetak lewat repr Settings
 
 
 # --- Start nyata: pesan di keluaran proses --------------------------------
@@ -292,7 +288,7 @@ def _start(tmp_path, **env) -> subprocess.CompletedProcess:
     )
 
 
-def test_start_live_dengan_key_valid_gagal_belum_didukung_tanpa_bocor(tmp_path):
+def test_start_live_dengan_key_valid_normal_tanpa_bocor(tmp_path):
     proc = _start(
         tmp_path,
         SOURCES_MODE="live",
@@ -301,11 +297,10 @@ def test_start_live_dengan_key_valid_gagal_belum_didukung_tanpa_bocor(tmp_path):
     )
 
     out = proc.stdout + proc.stderr
-    assert proc.returncode != 0
-    assert "SOURCES_MODE" in out
-    assert "belum didukung" in out
+    assert proc.returncode == 0, out
+    assert "aplikasi dimulai" in out
+    assert "sources_mode=live" in out
     assert "KEY-UJI-RAHASIA" not in out
-    assert "aplikasi dimulai" not in out
 
 
 def test_start_live_dengan_file_key_hilang_menyebut_nama_variabel(tmp_path):

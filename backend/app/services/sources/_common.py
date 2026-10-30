@@ -17,13 +17,19 @@ from typing import Any
 import httpx
 
 from app.services.ip_validation import validate_ip
-from app.services.sources.base import SourceReason, SourceResult, SourceStatus
+from app.services.sources.base import (
+    InputRejectedError,
+    SourceReason,
+    SourceResult,
+    SourceStatus,
+)
 
 # Memetakan body 200 (atau 404) ke hasil; None dari map_not_found berarti "bukan 404 yang dikenal".
 BodyMapper = Callable[[object, datetime], SourceResult]
 NotFoundMapper = Callable[[object, datetime], SourceResult | None]
 
 _RETRY_AFTER_SECONDS = re.compile(r"[0-9]{1,9}")
+_HEADER_INTEGER = re.compile(r"[0-9]{1,12}")
 
 
 def utc_now() -> datetime:
@@ -31,14 +37,14 @@ def utc_now() -> datetime:
 
 
 def require_public_ip(ip: str) -> str:
-    """Kembalikan IP kanonik, atau lempar ValueError tanpa membuat request.
+    """Kembalikan IP kanonik, atau lempar `InputRejectedError` tanpa membuat request.
 
     Pemanggil seharusnya sudah memvalidasi; ini pengaman terakhir karena VirusTotal
     menaruh IP di path URL.
     """
     result = validate_ip(ip)
     if not result.valid or result.ip is None:
-        raise ValueError(
+        raise InputRejectedError(
             "adapter sumber hanya boleh dipanggil dengan IPv4 publik yang valid"
         )
     return result.ip
@@ -78,6 +84,8 @@ def error_result(
     http_status: int | None = None,
     duration_ms: int | None = None,
     retry_after_seconds: int | None = None,
+    rate_limit_reset: datetime | None = None,
+    rate_limit_remaining: int | None = None,
 ) -> SourceResult:
     return SourceResult(
         source=source,
@@ -87,6 +95,8 @@ def error_result(
         http_status=http_status,
         duration_ms=duration_ms,
         retry_after_seconds=retry_after_seconds,
+        rate_limit_reset=rate_limit_reset,
+        rate_limit_remaining=rate_limit_remaining,
     )
 
 
@@ -140,6 +150,17 @@ def _retry_after_seconds(response: httpx.Response) -> int | None:
     return int(value) if _RETRY_AFTER_SECONDS.fullmatch(value) else None
 
 
+def _rate_limit_headers(response: httpx.Response) -> tuple[datetime | None, int | None]:
+    """`X-RateLimit-Reset` (epoch) dan `X-RateLimit-Remaining` (AbuseIPDB); nilai yang tidak
+    berupa bilangan bulat non-negatif diabaikan."""
+    reset = response.headers.get("X-RateLimit-Reset", "").strip()
+    remaining = response.headers.get("X-RateLimit-Remaining", "").strip()
+    return (
+        epoch_to_utc(int(reset)) if _HEADER_INTEGER.fullmatch(reset) else None,
+        int(remaining) if _HEADER_INTEGER.fullmatch(remaining) else None,
+    )
+
+
 def _classify_status(status_code: int) -> SourceReason:
     if status_code in (401, 403):
         return SourceReason.AUTH
@@ -173,8 +194,15 @@ def outcome_to_result(
     else:
         mapped = None
 
+    reset, remaining = _rate_limit_headers(response)
     if mapped is not None:
-        return replace(mapped, http_status=status_code, duration_ms=outcome.duration_ms)
+        return replace(
+            mapped,
+            http_status=status_code,
+            duration_ms=outcome.duration_ms,
+            rate_limit_reset=reset,
+            rate_limit_remaining=remaining,
+        )
     return error_result(
         source,
         _classify_status(status_code),
@@ -184,4 +212,6 @@ def outcome_to_result(
         retry_after_seconds=(
             _retry_after_seconds(response) if status_code == 429 else None
         ),
+        rate_limit_reset=reset,
+        rate_limit_remaining=remaining,
     )

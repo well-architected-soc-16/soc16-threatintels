@@ -13,6 +13,16 @@ from datetime import datetime
 from typing import Any, Literal, Protocol
 
 
+class InputRejectedError(ValueError):
+    """Input yang seharusnya sudah ditolak validasi (`validate_ip`) sampai ke adapter.
+
+    HANYA dilempar oleh `require_public_ip`. Ini bug pemanggil, bukan kegagalan satu sumber, jadi
+    hanya exception inilah yang dilempar keras oleh `collect_sources`; exception lain (termasuk
+    turunan `ValueError` seperti `JSONDecodeError`) diisolasi per sumber. Tetap turunan `ValueError`
+    agar pemanggil lama yang menangkap `ValueError` tidak berubah.
+    """
+
+
 class SourceStatus(enum.StrEnum):
     OK_SIGNAL = "OK_SIGNAL"
     OK_NO_SIGNAL = "OK_NO_SIGNAL"
@@ -39,6 +49,9 @@ class SourceReason(enum.StrEnum):
     TIMEOUT = "TIMEOUT"
     UPSTREAM = "UPSTREAM"
     INVALID_RESPONSE = "INVALID_RESPONSE"
+    # Bug di sisi kita (bukan layanan luar). Sengaja bukan UPSTREAM, yang di Bab 3 berarti layanan
+    # luar gagal. Kosakata tambahan di luar Bab 3; lihat TASK-02-progress.md.
+    INTERNAL_ERROR = "INTERNAL_ERROR"
     # SKIPPED
     ADAPTER_NOT_IMPLEMENTED = "ADAPTER_NOT_IMPLEMENTED"
     QUOTA_INTERNAL = "QUOTA_INTERNAL"  # dipakai pembatas kuota (Tahap 3)
@@ -70,6 +83,9 @@ class SourceResult:
     flags: tuple[str, ...] = ()
     # Detik dari header Retry-After pada 429, bila ada dan berupa angka.
     retry_after_seconds: int | None = None
+    # Header X-RateLimit-* (AbuseIPDB). Dipakai pembatas kuota; tidak ditampilkan di API.
+    rate_limit_reset: datetime | None = None
+    rate_limit_remaining: int | None = None
 
     def __post_init__(self) -> None:
         needs_reason = self.status in REASON_REQUIRED_STATUSES

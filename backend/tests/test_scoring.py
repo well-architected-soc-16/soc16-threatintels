@@ -19,7 +19,7 @@ from app.services.sources.base import (
     SourceResult,
     SourceStatus,
 )
-from app.services.sources.factory import get_sources
+from app.services.sources.factory import build_sources
 from tests.sources_support import (
     NOW,
     NYATA_ABUSEIPDB,
@@ -335,7 +335,7 @@ DEMO = [
 
 @pytest.mark.parametrize(("ip", "score", "status", "coverage", "label", "flags"), DEMO)
 def test_contoh_bab_4_lewat_adapter_mock(ip, score, status, coverage, label, flags):
-    results = ip_checks.collect_sources(ip, get_sources())
+    results = ip_checks.collect_sources(ip, build_sources())
     assessment = ip_checks.assess(results)
 
     assert assessment.assessment_status == status
@@ -391,7 +391,7 @@ def test_is_whitelisted_null_dari_respons_abuseipdb_tidak_menghasilkan_flag():
 @pytest.mark.parametrize("ip", [row[0] for row in DEMO])
 def test_hasil_tersimpan_bisa_di_jsonkan_dan_waktunya_utc(ip):
     stored = [
-        ip_checks.to_stored(r) for r in ip_checks.collect_sources(ip, get_sources())
+        ip_checks.to_stored(r) for r in ip_checks.collect_sources(ip, build_sources())
     ]
 
     decoded = json.loads(json.dumps(stored))  # JSONB memakai json.dumps

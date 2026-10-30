@@ -186,6 +186,45 @@ def test_401_dan_403_adalah_error_auth(status, fixture):
     assert result.http_status == status
 
 
+def test_header_rate_limit_dibaca_untuk_sukses_dan_error():
+    ok = fetch(
+        reply(
+            200,
+            fixture=NYATA,
+            headers={"X-RateLimit-Reset": "1793318400", "X-RateLimit-Remaining": "999"},
+        )
+    )
+    limited = fetch(
+        reply(
+            429,
+            fixture="abuseipdb_simulasi_429.json",
+            headers={"X-RateLimit-Reset": "1793318400", "X-RateLimit-Remaining": "0"},
+        )
+    )
+
+    for result, remaining in ((ok, 999), (limited, 0)):
+        assert result.rate_limit_reset == datetime(2026, 10, 30, 0, 0, tzinfo=UTC)
+        assert result.rate_limit_remaining == remaining
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {},
+        {"X-RateLimit-Reset": "besok", "X-RateLimit-Remaining": "banyak"},
+        {"X-RateLimit-Reset": "-5", "X-RateLimit-Remaining": "-1"},
+        {"X-RateLimit-Reset": "99999999999999999999"},
+    ],
+    ids=["tanpa-header", "bukan-angka", "negatif", "di-luar-rentang"],
+)
+def test_header_rate_limit_tidak_sah_diabaikan_tanpa_menggagalkan_hasil(headers):
+    result = fetch(reply(200, fixture=NYATA, headers=headers))
+
+    assert result.status is SourceStatus.OK_SIGNAL
+    assert result.rate_limit_reset is None
+    assert result.rate_limit_remaining is None
+
+
 def test_status_dibaca_sebelum_body_jadi_body_rusak_pada_401_tetap_auth():
     result = fetch(reply(401, raw="<html>bukan json</html>"))
 
