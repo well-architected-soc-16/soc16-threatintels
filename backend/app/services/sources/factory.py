@@ -12,6 +12,7 @@ from datetime import timedelta
 from functools import lru_cache
 
 import httpx
+from sqlalchemy import Engine
 
 from app.core.config import get_settings
 from app.core.deps import DbSession
@@ -59,7 +60,12 @@ def build_sources() -> list[ReputationSource]:
     ]
 
 
-def get_sources(db: DbSession) -> list[ReputationSource]:
+def build_gateways(engine: Engine) -> list[SourceGateway]:
+    """Adapter (mock atau live) yang dibungkus cache dan pembatas kuota bersama.
+
+    Dipakai `get_sources` (API) dan skrip smoke, supaya keduanya melewati limiter dan tabel
+    `source_calls` yang sama. Membuatnya tidak membaca/menulis DB dan tidak membuat request.
+    """
     settings = get_settings()
     ttl = CacheTtl(
         ok_signal=timedelta(hours=settings.cache_ttl_ok_signal_hours),
@@ -81,7 +87,7 @@ def get_sources(db: DbSession) -> list[ReputationSource]:
     return [
         SourceGateway(
             source,
-            engine=db.get_bind(),  # type: ignore[arg-type]
+            engine=engine,
             mode=settings.sources_mode,
             params_key=params_keys[source.name],
             policy=policies[source.name],
@@ -89,3 +95,7 @@ def get_sources(db: DbSession) -> list[ReputationSource]:
         )
         for source in build_sources()
     ]
+
+
+def get_sources(db: DbSession) -> list[ReputationSource]:
+    return build_gateways(db.get_bind())  # type: ignore[arg-type]

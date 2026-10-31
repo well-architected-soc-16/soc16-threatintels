@@ -60,7 +60,7 @@ Belum diimplementasi dan **tidak dikerjakan di TASK-01**. Perlu diputuskan sebel
 Temuan lain selama pengerjaan (juga belum ditangani):
 
 3. **Retry menimpa `reason`, `tags`, dan `submitted_by`** pada baris yang sama. Nilai lama hilang, dan audit log sengaja tidak menyimpan teks alasan, jadi alasan percobaan pertama tidak terlacak.
-4. **`coverage` untuk `NO_RECORD` dan `INSUFFICIENT_DATA` belum ditetapkan.** `assess()` hanya menghitung `OK_SIGNAL` dan `OK_NO_SIGNAL` sebagai "bisa dinilai". Perlu keputusan saat adapter AbuseIPDB/VirusTotal dibuat.
+4. ~~**`coverage` untuk `NO_RECORD` dan `INSUFFICIENT_DATA` belum ditetapkan.** `assess()` hanya menghitung `OK_SIGNAL` dan `OK_NO_SIGNAL` sebagai "bisa dinilai". Perlu keputusan saat adapter AbuseIPDB/VirusTotal dibuat.~~ **Selesai (TASK-02 Tahap 2, dicoret di Tahap 4):** keputusannya tetap seperti di atas dan kini tertulis di aturan domain `CLAUDE.md`: hanya `OK_SIGNAL` dan `OK_NO_SIGNAL` yang menambah cakupan; `NO_RECORD` dan `INSUFFICIENT_DATA` tidak. Perilakunya dites di `test_scoring.py`.
 5. **Audit login gagal menyimpan username yang dicoba** (di `detail`, dipotong 64 karakter). Jika seseorang salah mengetik password di kolom username, nilai itu ikut tersimpan.
 6. **Belum ada pembatasan percobaan login** (rate limit atau lockout).
 7. **Alamat IP klien di audit diambil dari koneksi langsung.** Di belakang reverse proxy nilainya akan berupa IP proxy; perlu penanganan `X-Forwarded-For` yang tepercaya saat deploy.
