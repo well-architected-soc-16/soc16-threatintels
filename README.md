@@ -29,14 +29,14 @@ Tools ini mendukung proses analisis SOC. SIEM, pengelolaan kasus insiden, dan re
 | Fitur | Hasil yang dituju | Status |
 |---|---|---|
 | Pemeriksaan reputasi IP | Pengguna memasukkan alamat IP dan memperoleh informasi reputasinya | Sebagian: validasi input dan penyimpanan hasil sudah ada; data reputasi belum |
-| Agregasi sumber eksternal | Hasil dari sumber yang dipilih disajikan dalam format yang konsisten | Sebagian (adapter, cache, dan kuota sudah ada; mode live belum diuji dengan API nyata) |
+| Agregasi sumber eksternal | Hasil dari sumber yang dipilih disajikan dalam format yang konsisten | Sebagian (adapter, cache, dan kuota sudah ada; mode live teruji dengan API nyata 31 Okt 2026) |
 | Penyajian hasil | Hasil menampilkan sumber, waktu pemeriksaan, dan konteks reputasi yang tersedia | Sebagian: sumber, status, dan waktu tampil; skor belum dihitung |
 | REST API | Pemeriksaan dapat diakses melalui endpoint yang terdokumentasi | Tersedia (lihat [Daftar Endpoint](#daftar-endpoint)) |
 | Dokumentasi Swagger | Endpoint, parameter, respons, dan kesalahan dapat diperiksa dan diuji | Tersedia di `/docs`, termasuk respons gagal |
 | Frontend web | Pengguna dapat melakukan pemeriksaan melalui browser | Direncanakan |
 | Integrasi MISP | Indikator hasil analisis dapat dikirim ke MISP | Sebagian: mode mock saja; MISP asli belum |
 
-Sumber v1 adalah AbuseIPDB dan VirusTotal; adapter, skor gabungan, label, dan flag sudah ada (mode mock); cache dan pembatas kuota sudah ada, sumber live belum diuji dengan API nyata. Perbedaan penilaian antar-sumber perlu tetap terlihat agar hasil dapat ditelusuri.
+Sumber v1 adalah AbuseIPDB dan VirusTotal; adapter, skor gabungan, label, dan flag sudah ada (mode mock); cache dan pembatas kuota sudah ada, dan mode live teruji dengan API nyata pada 31 Okt 2026. Perbedaan penilaian antar-sumber perlu tetap terlihat agar hasil dapat ditelusuri.
 
 ## Hubungan dengan SOC
 
@@ -60,7 +60,7 @@ Panduan RKS301 KM-5 mensyaratkan minimal satu sumber TI eksternal benar-benar di
 | Autentikasi | OAuth2 password flow + JWT (PyJWT), hash password argon2 (pwdlib) | Berjalan (lokal) |
 | Dokumentasi API | Swagger/OpenAPI di `/docs` | Tersedia |
 | Frontend | Vite + React + TypeScript | Belum dimulai |
-| Sumber reputasi | AbuseIPDB dan VirusTotal lewat adapter | Adapter, cache, kuota, dan mode mock ada; mode live belum diuji dengan API nyata (Tahap 4) |
+| Sumber reputasi | AbuseIPDB dan VirusTotal lewat adapter | Adapter, cache, kuota, dan mode mock ada; mode live teruji dengan API nyata 31 Okt 2026 |
 | Integrasi indikator | MISP | Mode mock; MISP asli belum |
 | Penyimpanan data | PostgreSQL 18 (psycopg 3) di kontainer | Berjalan (lokal) |
 | CI/CD | GitHub Actions dengan pemeriksaan keamanan dan build | Belum dibuat |
@@ -228,13 +228,25 @@ read -s key; printf '%s' $key > secrets/abuseipdb_api_key.txt; set -e key
 read -s key; printf '%s' $key > secrets/virustotal_api_key.txt; set -e key
 ```
 
-**2. Ubah `SOURCES_MODE` di `.env` menjadi `live`**, lalu buat ulang kontainer `api`:
+**2. Setel `SOURCES_MODE=live` di `.env`**, lalu buat ulang kontainer `api`. `.env` yang dibuat sebelum TASK-02 (dari TASK-01) **belum punya baris `SOURCES_MODE`**; jika hanya memakai `sed`, perintahnya diam tanpa error dan mode `mock` tetap dipakai. Perintah di bawah mengganti barisnya bila ada dan menambahkannya bila belum ada:
 
 ```fish
-sed -i 's/^SOURCES_MODE=.*/SOURCES_MODE=live/' .env
-docker compose up -d --force-recreate api
+if grep -q '^SOURCES_MODE=' .env
+    sed -i 's/^SOURCES_MODE=.*/SOURCES_MODE=live/' .env
+else
+    printf '\nSOURCES_MODE=live\n' >> .env
+end
+docker compose up -d --build --force-recreate api
 docker compose ps
 ```
+
+`--build` perlu bila kamu baru pindah ke branch atau versi kode yang baru (kode tidak di-mount ke kontainer; tanpa build, skrip smoke dan perbaikan terbaru tidak ada di image). **Verifikasi** bahwa kontainer benar-benar memakai `live` sebelum menjalankan smoke:
+
+```fish
+docker compose exec -T api printenv SOURCES_MODE
+```
+
+Harus tercetak `live`. Jika tercetak `mock`, jangan lanjut: skrip smoke akan menolak jalan (exit 2) dan tidak memakai kuota.
 
 Jika file key kosong atau masih berisi nilai contoh, `api` menolak start dan pesannya hanya menyebut nama variabel (cek `docker compose logs api`).
 
@@ -261,7 +273,10 @@ Baris `live` tidak boleh bertambah akibat cek kedua.
 ```fish
 sed -i 's/^SOURCES_MODE=.*/SOURCES_MODE=mock/' .env
 docker compose up -d --force-recreate api
+docker compose exec -T api printenv SOURCES_MODE
 ```
+
+Harus tercetak `mock`.
 
 Hasil mode `mock` dan `live` tercampur di riwayat `GET /checks` pada DB yang sama (belum ada filter `simulated`). Hasil mock selalu berflag `SUMBER_SIMULASI`; saat demo, mulai dari DB kosong atau sebut hasil mock sebagai simulasi.
 
