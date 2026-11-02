@@ -8,12 +8,12 @@ Diperbarui: 2026-11-02. Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-front
 |---|---|---|---|
 | Rencana | Rencana TASK-03, keputusan grilling (Keputusan 13-28), `PRODUCT.md` | #30 | Selesai, ter-merge |
 | 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | #31 | Selesai, ter-merge; uji LAN proxy, `:8000`, dan `/@fs` (12 dari 12 varian 403) lolos |
-| 1 | Rencana desain, API client, login, shell layout | | Rencana desain **disetujui dengan perubahan** (2 Nov); kode UI dalam pengerjaan |
+| 1 | Rencana desain, API client, login, shell layout | | Rencana desain disetujui (2 Nov); login, API client, dan shell selesai di branch lokal; **menunggu uji manual developer** (login 3 role, paksa 401) dan "push" |
 | 2 | Cek IP, bukti, riwayat | | Belum |
 | 3 | Kirim ke MISP, tampilan Kiriman MISP | | Belum |
 | 4 | Bukti demo, uji akses negatif, polish, README | | Belum |
 
-Hasil terakhir (Tahap 0): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `docker compose ps` `db` dan `api` `healthy`. Frontend `npm run lint`, `npm run build`, `npm test` (**3 passed**) hijau; `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**.
+Hasil terakhir (Tahap 1): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**78 passed**, 8 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_` di `frontend/src` kosong.
 
 ## Tahap 0
 
@@ -224,3 +224,53 @@ Catatan verifikasi untuk butir 6: yang dibaca dari berkas terpasang adalah `vers
 
 - Tahap 1 membangun login dan shell sesuai rencana ini, lalu `DESIGN.md` ditulis dari shell yang sudah jadi (lewat Impeccable, `impeccable-documenter`), bukan sebelum kode.
 - Bukti tampilan: developer mengirim screenshot (Keputusan 13h); tidak ada Playwright atau alat baru.
+
+## Tahap 1 — Pelaksanaan
+
+Dikerjakan di branch `feat/task-03-tahap-1-api-client-login-shell`. Tidak ada perubahan backend. Rencana desain di atas diikuti.
+
+**Yang dibangun** (`frontend/src`): `api/types.ts` (tipe tulis tangan, diverifikasi terhadap `backend/app`: `ReasonCode` 10 nilai, `Indication` 4, `Role` 3, `SourceReason`, flag), `api/client.ts` (klien `fetch`), `lib/errors.ts`, `lib/session.ts`, `lib/can.ts`, `lib/health.ts`, `auth/` (`TokenStore`, `performLogin`, `AuthProvider`, `useAuth`), `components/` (`LoginPage`, `Shell`, `TopBar`, `Button`, `Chip`, `Icon`, `useHealth`), `index.css` (token desain), serta `frontend/PRODUCT.md` dan `frontend/DESIGN.md`.
+
+### Keputusan dan penyimpangan dari rencana
+
+1. **`DESIGN.md` ditulis dari shell yang sudah jadi, bukan sebelum kode.** Tahap 1 butir 0 dan Keputusan 13g menyuruh menulisnya setelah rencana disetujui dan sebelum butir 1. Alasan penyimpangan: Impeccable memang mendokumentasikan sistem dari artefak yang terbangun (bukan dari niat), sehingga nilai radius, transisi, dan spasi bisa diambil dari CSS hasil build. Dokumen ini hanya memuat yang sudah terbangun; strip ringkasan ditandai "Tahap 2". Sidecar `.impeccable/design.json` **tidak** ditulis: berada di folder yang di-`.gitignore`, dan live mode Impeccable tidak dikonfigurasi. Kalimat deskriptif di `DESIGN.md` (nama "Meja Kerja Analis di Ruang Redup", nama warna, aturan bernama) adalah usulan saya dan belum dikonfirmasi developer, sedangkan panduan Impeccable meminta ditanyakan; silakan ubah bila tidak cocok.
+2. **Jam sesi dirakit dari `formatToParts`, bukan `format()`.** Diukur di Node 26: `Intl.DateTimeFormat('id-ID', …).format()` menghasilkan `14.33` (titik), sedangkan Keputusan 15 menulis `14:33`. Jam dan menit diambil dari `formatToParts` dan digabung dengan `:`, supaya hasilnya sama di semua peramban. Zona tetap `Asia/Jakarta`, `hourCycle: 'h23'` (tengah malam `00:05`, bukan `24:05`).
+3. **Ikon gambar sendiri (SVG), bukan glif teks.** `craft-floor.md` Impeccable menolak glif Unicode sebagai pengganti ikon; Keputusan 2 hanya melarang icon pack. Baru satu ikon dipakai di Tahap 1 (✕ untuk kegagalan). Ikon ✓ dan ↗ menyusul di Tahap 2–3.
+4. **Revalidasi sesi lewat `GET /auth/me`** pada setiap pergantian tampilan (dan saat shell dimuat). Tanpa ini shell kosong tidak pernah memanggil API terautentikasi, sehingga cek "token tidak valid → kembali ke login" mustahil dijalankan. Konsekuensinya: sesi yang dinonaktifkan atau kedaluwarsa baru terdeteksi saat user berpindah tampilan atau melakukan aksi, bukan secara proaktif (sesuai Keputusan 22).
+5. **401 basi diabaikan.** Klien hanya memicu logout global bila token yang mengirim request masih token saat ini; respons 401 dari sesi sebelumnya (setelah logout atau login ulang) tidak mengeluarkan sesi baru. Logout juga membatalkan request yang masih berjalan (`AbortController`).
+6. **Pengecualian 401 untuk login per-pemanggilan** (`handleUnauthorized: false`), bukan pencocokan URL. Panggilan `GET /auth/me` tepat setelah login juga memakainya; bila gagal, token dibuang (tidak ada keadaan setengah login).
+7. **Token di `TokenStore`** (kelas dengan field privat `#token`), bukan `useRef`, karena aturan lint React menandai akses ref di dalam closure yang dibuat saat render. Token tidak tampil di `JSON.stringify` maupun `Object.keys`. `credentials: 'omit'` dan `cache: 'no-store'` pada semua `fetch`.
+8. **`/health` diulang tiap 30 detik** (selain saat berganti tampilan) agar badge tidak menampilkan "sehat" untuk backend yang sudah mati. 503 dengan badan `HealthResponse` → "API: DB error"; backend mati atau badan bukan `HealthResponse` → "API: tidak terjangkau". Sebelum ada hasil, badge menampilkan "MISP: …" (tidak mengarang).
+9. **Galat validasi FastAPI tidak pernah menyalin `input` atau `ctx`** (422 pada login bisa memantulkan password); hanya nama field yang ditampilkan. Ada test dengan nilai pancingan.
+10. **Urutan DOM panel = urutan visual desktop** (riwayat, bukti, keputusan); layar < 1024px memakai CSS `order` (bukti → keputusan → riwayat). Konsekuensi: Tab di layar sempit melewati riwayat lebih dulu.
+11. **Kolom pencarian IP belum ada di top bar**; itu bagian Tahap 2 (Keputusan di peta layar). Tahap 1 memuat judul, navigasi, badge, role, jam sesi, dan Keluar.
+12. **Lint memakai Oxlint** dan sempat menandai dua hal yang diperbaiki, bukan diabaikan: kasus test `1e999` yang ternyata menjadi `null` lewat `JSON.stringify` (sekarang diuji dengan JSON mentah), dan akses ref saat render.
+
+### Bukti uji otomatis
+
+- 78 test Vitest: klien API (header Bearer, `auth:false`, form-urlencoded, 401 normal/basi/setelah logout, jaringan, bukan-JSON, 503 membawa badan, `abortAll`), parser galat (tiga bentuk 422, 404/409/501/502, tanpa salin `input`), `session` (base64url panjang mod 4 berbeda, karakter `-`/`_`, UTF-8, `exp` rusak, jam WIB), `can` (viewer tanpa cek dan MISP; analyst tanpa `can_send_misp` tanpa MISP), `health`, alur login (`performLogin`), dan render markup `LoginPage`/`Shell` lewat `react-dom/server` (`method="post"`, atribut `autocomplete`, tanpa tautan eksternal, urutan panel, jam sesi, tanpa `%`).
+- **Uji mutasi** (merusak kode sengaja, memastikan test gagal, lalu memulihkan): dekode base64url, penjaga 401 basi, penyalinan `input`, `method="post"`, urutan panel `order-*`, token tidak dibuang saat `/auth/me` gagal, dan `/auth/me` ikut logout global semuanya **tertangkap**. Dua temuan: (a) pengecualian login awalnya **lolos** karena test memakai `auth:false`, sehingga penjaga lain yang menahannya; test yang tepat sasaran ditambahkan dan kini menangkapnya. (b) Satu mutasi (membalik flag pada `POST /auth/login`) tidak menggagalkan test karena ekuivalen: request itu tanpa token, jadi flag tidak berpengaruh.
+- Smoke dev server (`npm run dev`, localhost): semua modul (`main.tsx`, `App.tsx`, `AuthProvider.tsx`, `Shell.tsx`, `LoginPage.tsx`, `TopBar.tsx`, `index.css`) ter-compile (HTTP 200), log bebas error/warn, proxy `/api/v1/health` 200, `/api/v1/auth/me` tanpa token 401. Detektor Impeccable (`detect --json src index.html`) tanpa temuan. Dev server dihentikan.
+
+### "Cek selesai" Tahap 1 — langkah developer (belum dijalankan)
+
+Agen tidak memegang password akun seed, jadi login nyata dan paksa-401 belum diuji di peramban. Jalankan sendiri:
+
+1. `docker compose up -d`, lalu `cd frontend; npm run dev`, buka `http://localhost:5173`.
+2. **Login 3 role** (admin, analyst, viewer): top bar menampilkan username, badge role yang benar, "MISP: mock", dan "sesi berakhir HH:mm WIB".
+3. **Password salah** → pesan "Username atau password salah" (bukan "Sesi berakhir"); isian password terkosongkan.
+4. **Paksa 401, cara A (tanpa ubah konfigurasi):** login sebagai viewer di UI. Di Swagger (`http://127.0.0.1:8000/docs`) login sebagai admin lalu `PATCH /api/v1/admin/users/{id}` dengan `{"is_active": false}` untuk akun viewer. Di UI, klik "Kiriman MISP" → kembali ke login dengan "Sesi berakhir, login lagi". Aktifkan lagi akun viewer setelahnya (`{"is_active": true}`). Admin tidak bisa menonaktifkan dirinya sendiri.
+5. **Paksa 401, cara B (kedaluwarsa):** ubah sementara `JWT_EXPIRE_MINUTES=1` di `.env`, `docker compose up -d --force-recreate api`, login, tunggu > 1 menit, ganti tampilan. Kembalikan nilainya ke 30 dan recreate lagi.
+6. **Refresh halaman** (F5) → kembali ke login (konsekuensi Keputusan 3).
+7. **Backend mati:** `docker compose stop api` → badge menjadi "API: tidak terjangkau" dalam ≤ 30 detik atau saat berganti tampilan; `docker compose start api` memulihkannya.
+8. **Pemeriksaan peramban (DevTools):** tab Application → Local Storage, Session Storage, Cookies kosong; tab Network → hanya request ke `localhost:5173` (tanpa CDN); setelah submit login, URL tidak berisi username/password.
+9. **Screenshot untuk kritik desain** (Keputusan 13h), dikirim ke agen: login dan shell pada 1280×720, 1024×768, dan lebar < 1024px (panel bertumpuk).
+
+## Known gaps baru (Tahap 1)
+
+1. **Uji manual login nyata, paksa-401, dan screenshot belum dilakukan** (butuh akun seed dan peramban); daftar langkah di atas.
+2. **Tidak ada uji peramban otomatis** (Playwright dilarang, Keputusan 13h; testing-library tidak dipakai, Keputusan 6). Perilaku klik dan submit di peramban sungguhan hanya tercakup oleh logika murni (`performLogin`, klien API) dan render markup, bukan oleh interaksi nyata.
+3. **Deteksi sesi berakhir tidak proaktif**: baru terjadi saat ganti tampilan atau aksi terautentikasi. Jam "sesi berakhir" berasal dari `exp`, sedangkan penegakannya tetap 401 dari backend.
+4. **Tab order di layar < 1024px** lebih dulu melewati riwayat (keputusan 10).
+5. **Kalimat deskriptif `DESIGN.md` belum dikonfirmasi developer** (keputusan 1).
+6. **Sidecar `.impeccable/design.json` tidak ada**; live mode Impeccable tidak dikonfigurasi. Bila nanti dibutuhkan, periksa isinya (tanpa path pribadi) sebelum di-commit.
