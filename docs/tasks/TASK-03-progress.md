@@ -7,7 +7,7 @@ Diperbarui: 2026-11-02. Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-front
 | Tahap | Isi | PR | Status |
 |---|---|---|---|
 | Rencana | Rencana TASK-03, keputusan grilling (Keputusan 13-28), `PRODUCT.md` | #30 | Selesai, ter-merge |
-| 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | (belum dibuka) | Selesai di branch lokal; uji LAN proxy dan `:8000` lolos, uji `/@fs` via LAN belum; menunggu "push" |
+| 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | (belum dibuka) | Selesai di branch lokal; uji LAN proxy, `:8000`, dan `/@fs` (sebagian) lolos; menunggu "push" |
 | 1 | Rencana desain, API client, login, shell layout | | Belum |
 | 2 | Cek IP, bukti, riwayat | | Belum |
 | 3 | Kirim ke MISP, tampilan Kiriman MISP | | Belum |
@@ -50,11 +50,16 @@ Uji LAN, dijalankan developer dari HP di jaringan yang sama dengan `npm run dev:
 - `http://<IP-laptop>:5173/api/v1/health` → **JSON health muncul**, isi sama dengan uji localhost: proxy jalan lewat LAN.
 - `http://<IP-laptop>:8000/docs` → **tidak dapat dijangkau**: API tidak terbuka ke LAN (di-bind ke `127.0.0.1`).
 
-**Belum dibuktikan:** uji `/@fs` (Keputusan 26) lewat `http://<IP-laptop>:5173/...` dari perangkat lain. Hasil localhost di atas belum membuktikan perilaku lewat IP LAN. Dicatat sebagai known gap 1 sampai diuji.
+Uji `/@fs` lewat IP LAN (Keputusan 26), dijalankan developer dari browser HP (Cara 2, bukan curl; hasil dilaporkan developer, bukan diamati agen):
+
+- Kontrol positif `/@fs/<repo>/frontend/package.json` → isi `package.json` tampil (memang boleh dilayani).
+- `/@fs/<repo>/secrets/db_password.txt` (polos, `?raw??`, `?import&raw??`) dan `/@fs/<repo>/.env` → semuanya **403**, tanpa isi file.
+
+**Cakupan uji LAN ini lebih sempit dari uji localhost:** hanya `db_password.txt` dan `.env` yang diuji lewat IP LAN, dan `.env` hanya varian polos. `abuseipdb_api_key.txt` dan `virustotal_api_key.txt` lewat LAN, serta `.env` dengan `?raw??` dan `?import&raw??`, belum diuji; ketiganya hanya terbukti 403 lewat localhost. Dicatat sebagai known gap 1.
 
 ## Known gaps baru (Tahap 0)
 
-1. **Uji `/@fs` lewat IP LAN belum dilakukan.** Hanya yang lewat localhost yang terbukti (semua 403). Perlu diulang dari perangkat lain sebelum sesi uji tim pertama; sampai itu selesai, jangan anggap Keputusan 26 terpenuhi sepenuhnya.
+1. **Uji `/@fs` lewat IP LAN hanya sebagian.** `db_password.txt` (3 varian) dan `.env` (varian polos) terbukti 403 dari HP; sisanya (dua file API key, dan `.env` dengan `?raw??`/`?import&raw??`) hanya terbukti lewat localhost. Risikonya kecil karena penolakan Vite tidak bergantung pada alamat klien, tetapi belum dibuktikan. Lengkapi (mis. Cara 1/Termux) sebelum sesi uji tim pertama bila ingin Keputusan 26 terpenuhi penuh.
 2. **Paragraf "Status" di README (baris 7) sudah usang** dan sudah usang sebelum tahap ini: masih menyebut sumber reputasi dan frontend belum ada. Tidak diubah karena di luar lingkup Tahap 0; perlu dirapikan di Tahap 4 atau PR docs sendiri.
 3. **Rentang `^` di `package.json`.** Reproduksibilitas dijamin `package-lock.json` dan `npm ci`; `npm install` tanpa lockfile bisa menarik versi minor yang lebih baru.
 4. **Warning deprecation Starlette/httpx** di pytest (`starlette.testclient` menyarankan `httpx2`) sudah ada sebelum tahap ini; tidak disentuh.
