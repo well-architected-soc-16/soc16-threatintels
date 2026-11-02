@@ -7,8 +7,8 @@ Diperbarui: 2026-11-02. Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-front
 | Tahap | Isi | PR | Status |
 |---|---|---|---|
 | Rencana | Rencana TASK-03, keputusan grilling (Keputusan 13-28), `PRODUCT.md` | #30 | Selesai, ter-merge |
-| 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | (belum dibuka) | Selesai di branch lokal; uji LAN proxy, `:8000`, dan `/@fs` (12 dari 12 varian 403) lolos; menunggu "push" |
-| 1 | Rencana desain, API client, login, shell layout | | Belum |
+| 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | #31 | Selesai, ter-merge; uji LAN proxy, `:8000`, dan `/@fs` (12 dari 12 varian 403) lolos |
+| 1 | Rencana desain, API client, login, shell layout | | Rencana desain ditulis, **menunggu persetujuan developer**; kode UI belum ditulis |
 | 2 | Cek IP, bukti, riwayat | | Belum |
 | 3 | Kirim ke MISP, tampilan Kiriman MISP | | Belum |
 | 4 | Bukti demo, uji akses negatif, polish, README | | Belum |
@@ -69,3 +69,142 @@ Jadi uji Keputusan 26 terpenuhi penuh lewat IP LAN dari perangkat lain (12 dari 
 2. **Paragraf "Status" di README (baris 7) sudah usang** dan sudah usang sebelum tahap ini: masih menyebut sumber reputasi dan frontend belum ada. Tidak diubah karena di luar lingkup Tahap 0; perlu dirapikan di Tahap 4 atau PR docs sendiri.
 3. **Rentang `^` di `package.json`.** Reproduksibilitas dijamin `package-lock.json` dan `npm ci`; `npm install` tanpa lockfile bisa menarik versi minor yang lebih baru.
 4. **Warning deprecation Starlette/httpx** di pytest (`starlette.testclient` menyarankan `httpx2`) sudah ada sebelum tahap ini; tidak disentuh.
+
+## Tahap 1 — Keputusan desain (menunggu persetujuan developer)
+
+Status: **DRAF, belum disetujui.** Belum ada kode UI. Sesuai Keputusan 13g, Tahap 1 berhenti di sini sampai developer menyetujui atau mengubah rencana ini. Setelah disetujui, Tahap 2–4 mengikuti rencana ini; perubahan = tanya dulu.
+
+### Dasar dan batas
+
+- Mode permukaan: **Operate** (meja kerja analis, bukan halaman pemasaran). Dunia visual hanya meminjamkan tipe, palet, kepadatan, dan satu gerakan khas; layout, navigasi, dan kontrol tetap standar web.
+- Arah sudah dipaku brief (Keputusan 1, 2, 9, 10, 13 dan Aturan tampilan): tema gelap slate, satu aksen biru, warna verdict hanya untuk label, tanpa dependency/CDN, keberanian hanya di strip ringkasan. Karena itu **undian arah (concept tournament) tidak dijalankan**; yang diputuskan di sini hanya hal yang brief biarkan terbuka (angka warna, tipe, ukuran, bentuk strip).
+- Skenario fisik: analis duduk di lab dengan laptop atau proyektor di ruangan yang diredupkan, membaca bukti beberapa menit per IP. Itu yang membuat tema gelap beralasan (Keputusan 10), bukan selera.
+- Sumber kontras: dihitung dengan rumus kontras relatif WCAG 2.x pada hex di bawah (angka di kolom "Kontras").
+
+### Warna inti (6, hex bernama)
+
+| Nama | Hex | Peran | Kontras |
+|---|---|---|---|
+| Tanah | `#0E141B` | latar halaman dan area bukti | teks utama di atasnya 15,44:1 |
+| Panel | `#151D27` | rel kiri/kanan, top bar, kartu | teks utama 14,16:1 |
+| Garis | `#64768A` | batas kontrol (input, tombol, chip) dan fokus netral; pembatas dekoratif = warna yang sama pada 35% opasitas | 3,64:1 pada Panel, 3,97:1 pada Tanah (lolos 3:1 untuk batas kontrol) |
+| Teks | `#E6EBF1` | teks utama, angka, IP | 14,16:1 pada Panel |
+| Teks redup | `#9FADBD` | label sekunder, keterangan, waktu | 7,43:1 pada Panel |
+| Aksen | `#5AA2FF` | **hanya** elemen interaktif: tombol utama, tautan, tab aktif, cincin fokus | 6,51:1 pada Panel; teks gelap `#06101C` di atas tombol Aksen 7,32:1 |
+
+Seluruh antarmuka **tanpa hijau**, termasuk untuk "sukses" (lihat Risiko 1). Kontras pembatas dekoratif sengaja rendah (≈1,3:1); batas yang dibutuhkan untuk mengenali kontrol memakai Garis penuh.
+
+### Warna semantik (wajib dari Aturan tampilan, di luar hitungan 6)
+
+Label selalu **teks + warna** (Aturan tampilan 8). Kolom "Chip" untuk daftar/riwayat; kolom "Strip" hanya untuk blok skor di strip ringkasan (satu-satunya area berwarna solid).
+
+| Keadaan | Chip (teks / latar) | Kontras chip | Strip (teks / isi blok) | Kontras strip |
+|---|---|---|---|---|
+| `RENDAH` | `#D3DCE6` / `#2A3644` (abu-slate, bukan biru, bukan hijau) | 8,86:1 | `#D3DCE6` / `#2A3644` + garis Garis | 8,86:1 |
+| `PERLU_PEMERIKSAAN` | `#F5D547` / `#2B2610` (kuning) | 10,44:1 | `#1A1500` / `#E8C21A` | 10,57:1 |
+| `TINGGI` | `#FFA347` / `#33200C` (oranye) | 7,82:1 | `#1A0F02` / `#F08A24` | 7,52:1 |
+| `SANGAT_TINGGI` | `#FF8A80` / `#3D1517` (merah) | 6,98:1 | `#FFFFFF` / `#C4262E` | 5,73:1 |
+| `null` → "N/A" | `#B4C0CE` pada Panel, **batas putus-putus** | 9,19:1 | `#B4C0CE`, tanpa isi, batas putus-putus | 9,19:1 |
+| `SUMBER_SIMULASI` | `#F5D547` / `#2B2610` + **bingkai tebal bergaris diagonal** + teks "SIMULASI · bukan data nyata" | 10,44:1 | sama, membingkai seluruh strip | 10,44:1 |
+| Gagal (`failed`, 501/502, sumber `ERROR`) | `#FF8A80` / `#3D1517` + glif "✕" + kotak berbatas | 6,98:1 | n/a | n/a |
+| `pending` | gaya kuning `PERLU_PEMERIKSAAN` + teks "Sedang diproses (pending)" | 10,44:1 | n/a | n/a |
+| Terkirim (`mock_sent`/`sent`) | chip **berbatas Garis tanpa isi**, teks `#E6EBF1`, tanpa hijau | 14,16:1 | n/a | n/a |
+
+### Tipografi (tanpa unduhan, tanpa CDN; Keputusan 13a)
+
+- **UI:** `system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif`. Satu keluarga untuk judul, label, tombol, dan teks; tidak ada display font.
+- **Mono (syarat fungsional, Keputusan 13b):** `ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace` untuk IP, `misp_event_uuid`, kode status/flag/reason (`OK_SIGNAL`, `RATE_LIMIT`), angka `http_status`, dan Raw JSON.
+- **Angka:** `font-variant-numeric: tabular-nums` untuk skor, cakupan, dan waktu.
+- **Skala tetap** (rem, basis 16px, rasio ≈1,2; bukan fluid):
+
+| Token | Ukuran | Dipakai untuk |
+|---|---|---|
+| `kecil` | 0,75rem (12px) | kode di samping penjelasan, keterangan waktu; **tidak ada teks di bawah 12px** |
+| `padat` | 0,875rem (14px) | baris tabel/riwayat, bukti per sumber, chip |
+| `isi` | 1rem (16px) | teks utama, input, tombol |
+| `sub` | 1,2rem | judul tab dan bagian rel kanan |
+| `judul` | 1,44rem | nama halaman (login), IP di strip |
+| `skor` | 4rem (64px), bobot 700 | **hanya** angka skor / "N/A" di strip ringkasan |
+
+Panjang baris teks penjelasan ≤ 75ch; tabel boleh lebih lebar.
+
+### Layout (ASCII)
+
+Halaman login: satu formulir kecil di tengah, bukan hero.
+
+```
+┌──────────────────────────────────────────────┐
+│                                              │
+│                    SOC16 TI                  │
+│        Masuk untuk memeriksa reputasi IP     │
+│                                              │
+│        Username  [____________________]     │
+│        Password  [____________________]     │
+│                                              │
+│        [ Masuk ]                             │
+│        (pesan error satu baris, inline)      │
+│                                              │
+└──────────────────────────────────────────────┘
+```
+
+Workbench ≥ 1024px. Lebar rel: **272 / fluid / 304px** pada ≥ 1280px; **232 / fluid / 264px** pada 1024–1279px. Rel kanan sticky.
+
+```
+┌ TOP BAR 56px (Panel) ───────────────────────────────────────────────────────────────────────────┐
+│ SOC16 TI │ [ IPv4 publik, mis. 118.25.6.39 ] [Cek IP] │ Workbench · Kiriman MISP │ MISP: mock │ user · role │ sesi 14.33 WIB │ Keluar │
+├ REL KIRI (Panel) ──┬ PANEL TENGAH (Tanah) ─────────────────────────────┬ REL KANAN (Panel, sticky) ──┤
+│ Riwayat            │ ╔ STRIP RINGKASAN ═══════════════════════════════╗ │ Cakupan 2/2                 │
+│ [saring IP…]       │ ║ 1.1.1.1  COMPLETE        ▨ SIMULASI · bukan data║ │ ■ AbuseIPDB   ■ VirusTotal  │
+│ ──────────────     │ ║ ┌────────┐                                      ║ │ Kesegaran                   │
+│ 1.1.1.1  SANGAT_T… │ ║ │  92.4  │ SANGAT_TINGGI                        ║ │ Flag (chip berpenjelasan)   │
+│ 1.0.0.1  TINGGI    │ ║ └────────┘ Indikasi sangat tinggi · periksa     ║ │ ──────────────              │
+│ 8.8.8.8  N/A       │ ║            segera, tanpa auto-block             ║ │ Status MISP / form kirim    │
+│ …                  │ ╚═════════════════════════════════════════════════╝ │ [Salin hasil] [Cek ulang]   │
+│ [Muat lagi]        │ Ringkasan │ AbuseIPDB │ VirusTotal │ Raw JSON       │ Pivot ↗ AbuseIPDB · VT      │
+│                    │ (bukti per sumber)                                  │                             │
+├────────────────────┴─────────────────────────────────────────────────────┴─────────────────────────────┤
+│ FOOTER  Sumber: AbuseIPDB, VirusTotal · scoring_version · Skor = label indikasi, bukan probabilitas     │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+Di bawah 1024px panel ditumpuk dalam urutan **bukti → keputusan → riwayat** (Keputusan 9). Top bar menjadi dua baris (judul + akun di atas, search + nav di bawah). Pada 1024–1279px strip membungkus jadi dua baris (IP/status di atas, skor + label di bawah).
+
+**Tahap 1 hanya membangun shell dan login**: top bar, tiga panel kosong berisi teks placeholder, footer, serta formulir login. Strip dan isi panel dibangun di Tahap 2 mengikuti rencana ini.
+
+### Gerakan khas (satu-satunya "keberanian"; Keputusan 13e)
+
+**Strip ringkasan** adalah satu-satunya area dengan blok warna solid dan teks 64px: skor (atau "N/A") di blok berwarna verdict, label di sampingnya, dan **pengukur cakupan** berupa dua sel bernama (AbuseIPDB, VirusTotal) yang terisi bila sumber menjawab dan putus-putus kosong (dengan kode `reason`) bila tidak. Sisa layar tenang: Panel dan Tanah, teks 14–16px, tanpa isi warna kecuali chip label. Untuk `null`, blok skor tidak berisi warna dan menampilkan "N/A" beserta `assessment_status`, sehingga tidak ada kondisi yang bisa dibaca "aman".
+
+### Komponen dan keadaan
+
+- Kontrol standar saja: tombol (utama = isi Aksen; sekunder = berbatas Garis; tanpa tombol bahaya karena tidak ada aksi destruktif), input teks, tab bergaris bawah, tabel polos, chip. Tanpa ikon pack: glif teks ("✕", "✓", "↗", "▨") atau SVG inline kecil bila perlu.
+- Setiap komponen interaktif punya keadaan: default, hover, **fokus**, aktif, nonaktif, memuat, galat. Fokus: cincin 2px Aksen dengan offset 2px (6,51:1 pada Panel), memakai `:focus-visible`, terlihat di semua kontrol; semua kontrol terjangkau keyboard.
+- Memuat: satu keadaan di strip (batang tak-tentu + teks "Memeriksa… bisa sampai belasan detik"); tombol berubah "Memeriksa…" dan nonaktif.
+- Keadaan kosong menjelaskan langkah berikutnya (satu kalimat), bukan layar sambutan.
+
+### Gerakan (motion)
+
+Hanya sebagai respons aksi user, 150–200 ms: buka/tutup panel konfirmasi MISP, pergantian tab, batang memuat saat pengecekan berjalan. Tanpa animasi saat halaman dimuat dan tanpa efek dekoratif. Di bawah `prefers-reduced-motion: reduce`: semua transisi 0 ms dan batang memuat diganti teks statis "Memeriksa…".
+
+### Prinsip
+
+1. Layar menjawab tiga hal: IP apa, apa bukti tiap sumber, apa aksi analis. Selain itu dibuang.
+2. Satu tempat berani (strip); sisanya tenang. Warna solid besar hanya di blok skor.
+3. Warna tidak pernah sendirian: setiap status punya teks, dan bentuknya berbeda bila warnanya sama.
+4. Ketidakpastian terlihat: N/A, putus-putus, dan bingkai simulasi tidak boleh tampak seperti kondisi normal.
+5. Kontrol yang dikenal analis, tanpa kontrol baru untuk gaya.
+6. Terbaca di proyektor 1280×720 dan 1024×768: tidak ada teks di bawah 12px, kontras AA ke atas.
+
+### Risiko dan hal yang perlu keputusan developer
+
+1. **Tanpa hijau sama sekali**, termasuk "Terkirim (mock)" yang memakai chip netral berbatas. Alasannya hijau dibaca "aman", dan Aturan tampilan melarangnya untuk `RENDAH`; konsistensinya satu aturan. Konsekuensi: keberhasilan kurang "terasa" dibanding gagal. Setuju, atau mau warna sukses terpisah?
+2. **Kuning dipakai tiga arti** (`PERLU_PEMERIKSAAN`, `SUMBER_SIMULASI`, `pending`). Aturan tampilan 4 meminta simulasi "kuning bergaris/berbingkai tebal", jadi dipertahankan; pembeda utamanya bentuk (bingkai diagonal tebal + teks "SIMULASI · bukan data nyata" vs chip polos). Strip bisa menampilkan keduanya sekaligus. Setuju, atau simulasi diberi warna lain (mengubah Aturan tampilan 4)?
+3. **Merah dipakai dua arti** (`SANGAT_TINGGI` dan gagal). Dibedakan oleh bentuk (blok skor solid vs kotak berbatas dengan "✕") dan teks. Bila terasa membingungkan, kegagalan sistem bisa memakai kotak berbatas tanpa isi.
+4. **Font sistem** membuat tampilan sedikit berbeda antar perangkat anggota tim (HP, laptop lain). Itu harga dari tanpa CDN dan tanpa file font. Menambah file `.woff2` ber-lisensi SIL OFL (Keputusan 13a) bisa dilakukan nanti bila diinginkan; **tanya dulu**.
+5. **Hitungan warna:** inti 6, ditambah palet semantik 7 keadaan yang diwajibkan Aturan tampilan. Dibaca "4–6 warna" pada Keputusan 13g untuk palet visual saja; semantik dihitung terpisah.
+6. **Pada 1024px** panel tengah hanya ±528px (rel 232 + 264). Strip membungkus dua baris; tabel bukti di tab harus bisa menggulir horizontal atau membungkus. Diuji di Tahap 4.
+
+### Setelah disetujui
+
+- Tahap 1 membangun login dan shell sesuai rencana ini, lalu `DESIGN.md` ditulis dari shell yang sudah jadi (lewat impeccable, `impeccable-documenter`), bukan sebelum kode.
+- Bukti tampilan: developer mengirim screenshot (Keputusan 13h); tidak ada Playwright atau alat baru.
