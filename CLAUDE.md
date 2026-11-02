@@ -20,8 +20,9 @@ MISP memakai **mode mock**. Pindah ke MISP asli atau sumber reputasi live harus 
   (mengikuti tutorial resmi FastAPI "OAuth2 with Password (and hashing), Bearer with JWT tokens")
 - HTTP ke sumber eksternal: **httpx** (client bisa disuntikkan; test memakai `httpx.MockTransport`)
 - Database: PostgreSQL di container (`postgres:18-alpine`), driver psycopg 3
-- Frontend (task terpisah, BELUM dimulai): Vite + React + TypeScript
-- Test: pytest + httpx (TestClient); lint & format: ruff
+- Frontend (TASK-03): Vite + React + TypeScript + Tailwind CSS v4, Node di laptop host (bukan kontainer); rencana di
+  `docs/tasks/TASK-03-frontend-workbench.md`
+- Test: pytest + httpx (TestClient); lint & format: ruff. Frontend: Vitest + Oxlint
 
 ## Perintah (dari root repo, fish)
 
@@ -33,6 +34,21 @@ docker compose exec api ruff format --no-cache --check .
 docker compose up -d --force-recreate api   # setelah .env.example berubah (mount satu file menyimpan inode)
 ```
 
+Gerbang frontend (dari root repo, fish; jalankan di setiap tahap TASK-03, selain gerbang backend di atas):
+
+```fish
+cd frontend
+npm ci
+npm run lint
+npm run build          # tsc -b + vite build
+npm test               # vitest run
+npm audit --omit=dev   # dan juga: npm audit (penuh); catat hasilnya, jangan --force
+cd ..
+```
+
+Dev: `cd frontend; npm run dev` (backend harus sudah `docker compose up -d`). Sesi uji tim lewat LAN: `npm run dev:lan`
+(lihat README "Uji bersama tim").
+
 ## Lokasi modul
 
 - `backend/app/core/` config, security, deps (auth/RBAC), logging, timeutil, secret_policy
@@ -40,7 +56,7 @@ docker compose up -d --force-recreate api   # setelah .env.example berubah (moun
 - `backend/app/services/` audit, ip_validation, ip_checks, `misp/` (Protocol, mock, kerangka live),
   `sources/` (adapter AbuseIPDB/VirusTotal + mock, mulai TASK-02), `scoring.py` (mulai TASK-02)
 - `backend/alembic/versions/` migrasi; `backend/tests/` test; `backend/tests/fixtures/sources/` fixture respons sumber
-- `docs/tasks/` rencana dan progres per task
+- `frontend/` Vite + React + TS (`src/`, `vite.config.ts` berisi proxy `/api`); `docs/tasks/` rencana dan progres per task
 
 ## Peran & hak akses (RBAC) — wajib ditegakkan di BACKEND
 
@@ -90,6 +106,10 @@ Uji akses negatif (viewer/analyst ditolak 403) WAJIB punya test — ini bukti KM
 - Jangan menyimpan data kontak dari respons sumber (whois, RDAP, email/telepon) ke DB maupun fixture.
 - Postgres TIDAK di-expose ke host (tanpa `ports:`). API di-bind ke `127.0.0.1` saat dev.
 - Jangan matikan verifikasi TLS secara global (nanti untuk MISP self-signed, pakai file CA).
+- Frontend: semua variabel `VITE_*` ikut ter-bundle ke browser, jadi **tidak boleh** berisi rahasia. Jangan mengisi
+  `server.allowedHosts: true` di Vite (celah DNS rebinding).
+- Frontend: kalau `npm audit` melaporkan advisory pada paket `vite` dengan severity apa pun, **jangan jalankan
+  `npm run dev:lan`** sampai di-upgrade (advisory `server.fs` Vite berlaku saat dev server dibuka dengan `--host`).
 - Jangan memanggil API eksternal (AbuseIPDB, VirusTotal, MISP) di pytest — gunakan mock/fixture.
   Panggilan API nyata hanya lewat skrip smoke yang dijalankan manual oleh developer (memakan kuota).
 
