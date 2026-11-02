@@ -59,7 +59,7 @@ Panduan RKS301 KM-5 mensyaratkan minimal satu sumber TI eksternal benar-benar di
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.x, Alembic, Pydantic v2 | Berjalan (lokal) |
 | Autentikasi | OAuth2 password flow + JWT (PyJWT), hash password argon2 (pwdlib) | Berjalan (lokal) |
 | Dokumentasi API | Swagger/OpenAPI di `/docs` | Tersedia |
-| Frontend | Vite + React + TypeScript | Belum dimulai |
+| Frontend | Vite + React + TypeScript + Tailwind CSS v4 | Kerangka saja (TASK-03 Tahap 0): dev server, proxy `/api`, Vitest; belum ada tampilan workbench |
 | Sumber reputasi | AbuseIPDB dan VirusTotal lewat adapter | Adapter, cache, kuota, dan mode mock ada; mode live teruji dengan API nyata 31 Okt 2026 |
 | Integrasi indikator | MISP | Mode mock; MISP asli belum |
 | Penyimpanan data | PostgreSQL 18 (psycopg 3) di kontainer | Berjalan (lokal) |
@@ -347,6 +347,49 @@ docker compose exec api ruff format --no-cache --check .
 Setelah mengubah kode, jalankan `docker compose up -d --build` agar image `api` terbarui sebelum menjalankan test.
 
 `tests/test_env_example.py` memastikan nilai contoh di `.env.example` selalu ditolak aplikasi dan seed. File itu di-mount read-only ke kontainer `api` oleh `docker-compose.yml` (khusus dev). Karena mount satu file menyimpan inode-nya, setelah `.env.example` diubah atau di-pull jalankan `docker compose up -d --force-recreate api` agar kontainer melihat isi terbaru; tanpa itu test bisa lulus terhadap isi lama. Jika file tidak ditemukan, test gagal (tidak di-skip).
+
+### Frontend (dev)
+
+Frontend ada di `frontend/` (Vite + React + TypeScript + Tailwind CSS v4) dan dijalankan dengan Node di laptop, bukan di kontainer. Rencana rinci: [`docs/tasks/TASK-03-frontend-workbench.md`](docs/tasks/TASK-03-frontend-workbench.md). Saat ini baru kerangka; tampilan workbench dikerjakan di tahap berikutnya.
+
+Prasyarat: Node **22.12 atau lebih baru** (syarat Vite). Vitest 5 hanya mendukung Node `^22.12`, `^24`, dan `>=26`, jadi Node 23 dan 25 tidak didukung. Backend juga harus sudah berjalan (`docker compose up -d`).
+
+```fish
+cd frontend
+npm ci
+npm run dev        # http://localhost:5173
+```
+
+Dev server meneruskan `/api` ke `http://127.0.0.1:8000` (`server.proxy` di `frontend/vite.config.ts`), jadi backend tidak perlu CORS. Untuk memeriksa proxy, buka `http://localhost:5173/api/v1/health` di browser: hasilnya JSON health dari backend. Proxy hanya berlaku di dev server; produksi butuh reverse proxy (task deploy).
+
+Gerbang kualitas frontend:
+
+```fish
+cd frontend
+npm ci
+npm run lint
+npm run build
+npm test
+npm audit --omit=dev
+npm audit
+cd ..
+```
+
+Jangan menaruh rahasia di variabel `VITE_*`: semuanya ikut ter-bundle ke browser. Tidak ada file `.env*` di `frontend/`.
+
+### Uji bersama tim (LAN)
+
+Untuk sesi uji, dev server dibuka ke jaringan dari laptop developer (`npm run dev:lan`, yaitu `vite --host`). API tetap terikat ke `127.0.0.1:8000` dan hanya terjangkau lewat proxy `/api`; Swagger `/docs` tidak ikut terbuka ke LAN. Ini hanya untuk sesi uji, bukan layanan tetap. Akses tetap untuk tim nanti lewat deploy ke `soc-ir` dan VPN (task deploy).
+
+Aturan sesi:
+
+- Pakai jaringan yang hanya berisi tim (mis. hotspot HP developer ber-password), **bukan** Wi-Fi kampus terbuka. Dev server masih HTTP biasa, sehingga password login lewat jaringan tanpa enkripsi TLS, dan login backend belum punya pembatas percobaan.
+- Sebelum sesi, jalankan `npm audit` penuh. Bila ada advisory pada paket `vite` dengan severity apa pun, **jangan** jalankan `dev:lan` sampai di-upgrade.
+- Jalankan `docker compose up -d`, lalu `cd frontend; npm run dev:lan`. Bagikan `http://<IP-laptop>:5173`. Cari IP laptop dengan `ip -4 addr`. Jika firewall laptop aktif, buka port 5173 **hanya selama sesi**.
+- Matikan dengan `Ctrl+C` setelah sesi selesai. Laptop jangan sleep selama sesi.
+- Akun: empat akun hasil `scripts.seed_users` (admin, analyst_misp, analyst, viewer), satu per anggota sesuai peran. Password dibagikan langsung atau lewat Bitwarden, **tidak** ditempel di grup chat atau di repo.
+- Default `SOURCES_MODE=mock` (semua hasil berlabel SIMULASI). Mode live memakai **kuota bersama** (VirusTotal 4/menit dan 500/hari); beri tahu tim sebelum menyalakannya.
+- Alur kirim MISP hanya bisa dicoba pada check **live** (hasil mock tidak boleh dikirim). Sebelum sesi, developer membuat satu atau dua check live dengan sadar (masing-masing memakai kuota 1 VirusTotal dan 1 AbuseIPDB), lalu kembali ke mock.
 
 ### Struktur backend
 
