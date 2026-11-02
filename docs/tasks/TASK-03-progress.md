@@ -7,7 +7,7 @@ Diperbarui: 2026-11-02. Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-front
 | Tahap | Isi | PR | Status |
 |---|---|---|---|
 | Rencana | Rencana TASK-03, keputusan grilling (Keputusan 13-28), `PRODUCT.md` | #30 | Selesai, ter-merge |
-| 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | (belum dibuka) | Selesai di branch lokal; uji LAN proxy, `:8000`, dan `/@fs` (sebagian) lolos; menunggu "push" |
+| 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | (belum dibuka) | Selesai di branch lokal; uji LAN proxy, `:8000`, dan `/@fs` (12 dari 12 varian 403) lolos; menunggu "push" |
 | 1 | Rencana desain, API client, login, shell layout | | Belum |
 | 2 | Cek IP, bukti, riwayat | | Belum |
 | 3 | Kirim ke MISP, tampilan Kiriman MISP | | Belum |
@@ -55,11 +55,17 @@ Uji `/@fs` lewat IP LAN (Keputusan 26), dijalankan developer dari browser HP (Ca
 - Kontrol positif `/@fs/<repo>/frontend/package.json` → isi `package.json` tampil (memang boleh dilayani).
 - `/@fs/<repo>/secrets/db_password.txt` (polos, `?raw??`, `?import&raw??`) dan `/@fs/<repo>/.env` → semuanya **403**, tanpa isi file.
 
-**Cakupan uji LAN ini lebih sempit dari uji localhost:** hanya `db_password.txt` dan `.env` yang diuji lewat IP LAN, dan `.env` hanya varian polos. `abuseipdb_api_key.txt` dan `virustotal_api_key.txt` lewat LAN, serta `.env` dengan `?raw??` dan `?import&raw??`, belum diuji; ketiganya hanya terbukti 403 lewat localhost. Dicatat sebagai known gap 1.
+Uji itu cakupannya lebih sempit, jadi dilengkapi dengan Cara 1 (Termux di HP, `curl` yang hanya mencetak kode HTTP, `http://<IP-laptop>:5173`; hasil dilaporkan developer):
+
+- Kontrol positif `/@fs/<repo>/frontend/package.json` → **200**.
+- Semua 3 file di `secrets/` (`abuseipdb_api_key.txt`, `db_password.txt`, `virustotal_api_key.txt`) × 3 varian (polos, `?raw??`, `?import&raw??`) → **403** (9 dari 9).
+- `.env` × 3 varian → **403** (3 dari 3).
+
+Jadi uji Keputusan 26 terpenuhi penuh lewat IP LAN dari perangkat lain (12 dari 12 varian 403 dengan kontrol 200). Prosedur hash Keputusan 27 tidak diperlukan.
 
 ## Known gaps baru (Tahap 0)
 
-1. **Uji `/@fs` lewat IP LAN hanya sebagian.** `db_password.txt` (3 varian) dan `.env` (varian polos) terbukti 403 dari HP; sisanya (dua file API key, dan `.env` dengan `?raw??`/`?import&raw??`) hanya terbukti lewat localhost. Risikonya kecil karena penolakan Vite tidak bergantung pada alamat klien, tetapi belum dibuktikan. Lengkapi (mis. Cara 1/Termux) sebelum sesi uji tim pertama bila ingin Keputusan 26 terpenuhi penuh.
+1. **Uji `/@fs` valid untuk Vite 8.3.5 pada hari ini saja.** Hasilnya bergantung pada versi Vite terpasang. Ulangi bila Vite di-upgrade, dan jalankan `npm audit` penuh sebelum setiap sesi `dev:lan` (Keputusan 25).
 2. **Paragraf "Status" di README (baris 7) sudah usang** dan sudah usang sebelum tahap ini: masih menyebut sumber reputasi dan frontend belum ada. Tidak diubah karena di luar lingkup Tahap 0; perlu dirapikan di Tahap 4 atau PR docs sendiri.
 3. **Rentang `^` di `package.json`.** Reproduksibilitas dijamin `package-lock.json` dan `npm ci`; `npm install` tanpa lockfile bisa menarik versi minor yang lebih baru.
 4. **Warning deprecation Starlette/httpx** di pytest (`starlette.testclient` menyarankan `httpx2`) sudah ada sebelum tahap ini; tidak disentuh.
