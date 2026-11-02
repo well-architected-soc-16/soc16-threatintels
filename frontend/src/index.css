@@ -1,1 +1,94 @@
 @import "tailwindcss";
+
+/* Token desain mengikuti "Keputusan desain" di docs/tasks/TASK-03-progress.md (disetujui 2 Nov 2026). */
+@theme {
+  /* Warna inti */
+  --color-tanah: #0e141b;
+  --color-panel: #151d27;
+  --color-garis: #64768a;
+  --color-teks: #e6ebf1;
+  --color-redup: #9fadbd;
+  --color-aksen: #5aa2ff;
+  --color-aksen-ink: #06101c;
+
+  /* Warna semantik (wajib dari Aturan tampilan; dipakai mulai Tahap 2) */
+  --color-rendah: #d3dce6;
+  --color-rendah-bg: #2a3644;
+  --color-perlu: #f5d547;
+  --color-perlu-bg: #2b2610;
+  --color-tinggi: #ffa347;
+  --color-tinggi-bg: #33200c;
+  --color-sangat: #ff8a80;
+  --color-sangat-bg: #3d1517;
+  --color-na: #b4c0ce;
+  --color-simulasi: #e9d5ff;
+  --color-simulasi-bg: #2a1a40;
+  --color-simulasi-garis: #c084fc;
+  --color-gagal: #ff8a80;
+
+  /* Tipografi: system font stack, tanpa unduhan dan tanpa CDN (Keputusan 13a) */
+  --font-sans:
+    system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
+    sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+
+  /* Skala tetap (rem, bukan fluid); tidak ada teks di bawah 12px */
+  --text-kecil: 0.75rem;
+  --text-kecil--line-height: 1.4;
+  --text-padat: 0.875rem;
+  --text-padat--line-height: 1.45;
+  --text-isi: 1rem;
+  --text-isi--line-height: 1.5;
+  --text-sub: 1.2rem;
+  --text-sub--line-height: 1.35;
+  --text-judul: 1.44rem;
+  --text-judul--line-height: 1.25;
+  --text-skor: 4rem;
+  --text-skor--line-height: 1;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    background: var(--color-tanah);
+    color: var(--color-teks);
+    font-family: var(--font-sans);
+    accent-color: var(--color-aksen);
+    scrollbar-color: var(--color-garis) var(--color-tanah);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-size: var(--text-isi);
+    line-height: var(--text-isi--line-height);
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-aksen) 35%, transparent);
+    color: var(--color-teks);
+  }
+
+  input,
+  textarea {
+    caret-color: var(--color-aksen);
+  }
+
+  /* Fokus keyboard terlihat di semua kontrol: cincin 2px Aksen, offset 2px */
+  :focus-visible {
+    outline: 2px solid var(--color-aksen);
+    outline-offset: 2px;
+  }
+}
+
+/* Gerakan hanya sebagai respons aksi user; dimatikan bila user meminta (Keputusan 13d) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

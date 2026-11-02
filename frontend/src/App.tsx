@@ -1,9 +1,10 @@
+import { useAuth } from './auth/useAuth'
+import { LoginPage } from './components/LoginPage'
+import { Shell } from './components/Shell'
+
 function App() {
-  return (
-    <main>
-      <h1>SOC16 TI</h1>
-    </main>
-  )
+  const { user } = useAuth()
+  return user === null ? <LoginPage /> : <Shell />
 }
 
 export default App
