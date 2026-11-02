@@ -1,4 +1,4 @@
-import type { ApiFailure } from '../api/client'
+import { isUnreachable, type ApiFailure } from '../api/client'
 import type {
   CheckRejected,
   IocDuplicate,
@@ -78,7 +78,7 @@ export type CheckError =
   | { kind: 'unknown'; message: string }
 
 export function parseCheckError(failure: ApiFailure): CheckError {
-  if (failure.kind === 'network' || failure.kind === 'aborted') {
+  if (isUnreachable(failure) || failure.kind === 'aborted') {
     return { kind: 'network' }
   }
   const { status, body } = failure
@@ -128,7 +128,7 @@ export type IocError =
   | { kind: 'unknown'; message: string }
 
 export function parseIocError(failure: ApiFailure): IocError {
-  if (failure.kind === 'network' || failure.kind === 'aborted') {
+  if (isUnreachable(failure) || failure.kind === 'aborted') {
     return { kind: 'network' }
   }
   const { status, body } = failure

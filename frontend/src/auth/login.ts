@@ -1,4 +1,4 @@
-import type { ApiClient } from '../api/client'
+import { isUnreachable, type ApiClient } from '../api/client'
 import type { Token, UserOut } from '../api/types'
 import type { LoginError } from './AuthContext'
 import type { TokenStore } from './tokenStore'
@@ -24,7 +24,7 @@ export async function performLogin(
     handleUnauthorized: false,
   })
   if (!response.ok) {
-    if (response.kind === 'network' || response.kind === 'aborted') {
+    if (isUnreachable(response) || response.kind === 'aborted') {
       return { ok: false, error: 'network' }
     }
     return {
@@ -44,9 +44,7 @@ export async function performLogin(
     return {
       ok: false,
       error:
-        me.kind === 'network' || me.kind === 'aborted'
-          ? 'network'
-          : 'unexpected',
+        isUnreachable(me) || me.kind === 'aborted' ? 'network' : 'unexpected',
     }
   }
   return { ok: true, user: me.data, token }

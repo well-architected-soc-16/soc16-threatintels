@@ -122,6 +122,39 @@ describe('performLogin', () => {
     expect(store.get()).toBeNull()
   })
 
+  it('backend mati di balik proxy Vite (502 text/plain, badan kosong) = network, bukan "unexpected"', async () => {
+    const { api, store, onUnauthorized } = setup(
+      () => new Response('', { status: 502, headers: { 'Content-Type': 'text/plain' } }),
+    )
+    expect(await performLogin(api, store, 'x', 'y')).toEqual({
+      ok: false,
+      error: 'network',
+    })
+    expect(store.get()).toBeNull()
+    expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+
+  it('login sukses tetapi /auth/me 502 (backend mati di tengah): token dibuang, galat network', async () => {
+    const { api, store } = setup((url) =>
+      url.endsWith('/auth/login')
+        ? json(200, { access_token: 'tok-1', token_type: 'bearer' })
+        : new Response('', { status: 502 }),
+    )
+    expect(await performLogin(api, store, 'x', 'y')).toEqual({
+      ok: false,
+      error: 'network',
+    })
+    expect(store.get()).toBeNull()
+  })
+
+  it('500 tanpa badan tetap "unexpected" (galat server, bukan tidak terjangkau)', async () => {
+    const { api, store } = setup(() => new Response('Internal Server Error', { status: 500 }))
+    expect(await performLogin(api, store, 'x', 'y')).toEqual({
+      ok: false,
+      error: 'unexpected',
+    })
+  })
+
   it.each([
     ['token kosong', { access_token: '', token_type: 'bearer' }],
     ['tanpa access_token', { token_type: 'bearer' }],

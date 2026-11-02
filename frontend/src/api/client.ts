@@ -14,6 +14,19 @@ export interface ApiFailure {
 
 export type ApiResult<T> = { ok: true; status: number; data: T } | ApiFailure
 
+// Backend tidak terjangkau. `fetch` hanya menolak bila server dev tidak menjawab sama sekali; bila backend mati
+// di balik proxy Vite, proxy menjawab 502 (text/plain, badan kosong) — diukur dengan backend dihentikan.
+// 502/503/504 TANPA badan JSON diperlakukan sama. 502 dengan badan IocOut (kegagalan MISP) dan 503 dengan
+// badan HealthResponse bukan "tidak terjangkau": keduanya punya badan JSON. 500 tanpa badan tetap galat server.
+export function isUnreachable(failure: ApiFailure): boolean {
+  if (failure.kind === 'network') return true
+  return (
+    failure.kind === 'http' &&
+    failure.body === null &&
+    (failure.status === 502 || failure.status === 503 || failure.status === 504)
+  )
+}
+
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH'
   json?: unknown

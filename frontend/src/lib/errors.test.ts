@@ -67,6 +67,23 @@ describe('parseCheckError', () => {
   })
 })
 
+describe('backend tidak terjangkau (proxy Vite menjawab 502 tanpa badan)', () => {
+  it('parseCheckError dan parseIocError memetakan ke network, bukan server', () => {
+    expect(parseCheckError(http(502, null)).kind).toBe('network')
+    expect(parseCheckError(http(504, null)).kind).toBe('network')
+    expect(parseIocError(http(502, null)).kind).toBe('network')
+  })
+
+  it('502 DENGAN badan IocOut tetap kegagalan MISP, bukan tidak terjangkau', () => {
+    expect(parseIocError(http(502, iocOut)).kind).toBe('failed')
+  })
+
+  it('500 tanpa badan tetap galat server', () => {
+    expect(parseCheckError(http(500, null)).kind).toBe('server')
+    expect(parseIocError(http(500, null)).kind).toBe('server')
+  })
+})
+
 describe('parseIocError', () => {
   it('404 membawa detail backend', () => {
     expect(parseIocError(http(404, { detail: 'Cek tidak ditemukan' }))).toEqual({
@@ -130,8 +147,8 @@ describe('parseIocError', () => {
     }
   })
 
-  it('502 tanpa badan IocOut (mis. gateway) dianggap galat server', () => {
-    expect(parseIocError(http(502, null)).kind).toBe('server')
+  it('500 tanpa badan IocOut dianggap galat server', () => {
+    expect(parseIocError(http(500, null)).kind).toBe('server')
   })
 
   it('403 memakai pesan tetap dan 401 menandai sesi', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createApiClient } from './client'
+import { createApiClient, isUnreachable, type ApiFailure } from './client'
 
 type FetchCall = { url: string; init: RequestInit }
 
@@ -155,5 +155,34 @@ describe('createApiClient', () => {
     const pending = client.get('/checks')
     client.abortAll()
     expect(await pending).toMatchObject({ ok: false, kind: 'aborted' })
+  })
+})
+
+describe('isUnreachable', () => {
+  const failure = (over: Partial<ApiFailure>): ApiFailure => ({
+    ok: false,
+    status: 0,
+    kind: 'http',
+    body: null,
+    ...over,
+  })
+
+  it('jaringan gagal dan 502/503/504 tanpa badan (proxy Vite saat backend mati) = tidak terjangkau', () => {
+    expect(isUnreachable(failure({ kind: 'network' }))).toBe(true)
+    for (const status of [502, 503, 504]) {
+      expect(isUnreachable(failure({ status }))).toBe(true)
+    }
+  })
+
+  it('502 dan 503 DENGAN badan JSON bukan "tidak terjangkau" (IocOut gagal MISP, HealthResponse)', () => {
+    expect(isUnreachable(failure({ status: 502, body: { status: 'failed' } }))).toBe(false)
+    expect(isUnreachable(failure({ status: 503, body: { db: 'error' } }))).toBe(false)
+  })
+
+  it('500 tanpa badan tetap galat server; 401/404 dan aborted bukan tidak terjangkau', () => {
+    expect(isUnreachable(failure({ status: 500 }))).toBe(false)
+    expect(isUnreachable(failure({ status: 401 }))).toBe(false)
+    expect(isUnreachable(failure({ status: 404 }))).toBe(false)
+    expect(isUnreachable(failure({ kind: 'aborted' }))).toBe(false)
   })
 })
