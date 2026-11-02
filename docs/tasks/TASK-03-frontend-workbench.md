@@ -42,6 +42,11 @@ harus menjawab salah satu: (1) IP apa? (2) apa bukti tiap sumber? (3) apa keputu
    MISP**. Di layar < 1024px, panel ditumpuk: bukti → keputusan → riwayat.
 10. **Tema gelap slate** (bukan hitam pekat), satu warna aksen biru untuk elemen interaktif, warna verdict hanya untuk label.
     Wajib lolos cek kontras di proyektor (Tahap 4).
+    **Pengecualian eksplisit (developer, 2 Nov 2026):** merah untuk status **kegagalan** (`failed`, 501/502, sumber `ERROR`)
+    boleh dipakai walau merah juga warna verdict `SANGAT_TINGGI`, karena kegagalan bukan verdict. Dibedakan oleh bentuk:
+    kegagalan = chip **berbingkai tanpa isi** + ikon ✕ + teks "Gagal"; `SANGAT_TINGGI` = chip **terisi** + teks label.
+    Kuning dan hijau tidak boleh dipakai untuk selain label verdict: `SUMBER_SIMULASI` memakai warna khusus non-verdict
+    (ungu), `pending` memakai abu netral, dan tidak ada hijau di seluruh antarmuka (termasuk "Terkirim").
 11. **Prioritas: fungsi jalan dulu, rapi belakangan** (developer, 2 Nov). Urutan wajib sebelum tim menguji: Tahap 0 → 1 → 2
     → 3. Di setiap tahap, butir bertanda **[NANTI]** boleh ditunda ke Tahap 4 bila waktu mepet; catat di progress.
     Yang **tidak boleh** ditunda karena menyangkut kebenaran data: aturan tampilan 1, 2, 4, 5, 7.
@@ -50,8 +55,9 @@ harus menjawab salah satu: (1) IP apa? (2) apa bukti tiap sumber? (3) apa keputu
     `127.0.0.1:8000` dan hanya terjangkau lewat proxy `/api` (Swagger `/docs` **tidak** ikut terbuka ke LAN).
     Aturan sesi ada di README bagian "Uji bersama tim" (Tahap 0). Akses tetap untuk tim nanti lewat deploy ke soc-ir + VPN
     (task deploy, di luar TASK-03).
-13. **Desain visual memakai skill `impeccable`** (skill lokal developer; PRODUCT.md di root repo hasil `/impeccable init`).
-    Brief-nya adalah dokumen ini: Keputusan, Koreksi, dan Aturan tampilan MENANG atas saran skill. Batasan tambahan:
+13. **Desain visual memakai plugin Impeccable** (github.com/pbakaus/impeccable, Apache-2.0, versi 4.8.0; dipilih developer
+    dengan sengaja, bukan `frontend-design` resmi). Brief-nya adalah dokumen ini: Keputusan, Koreksi, dan Aturan tampilan
+    MENANG atas `PRODUCT.md`/`DESIGN.md` dan atas arahan Impeccable. Batasan tambahan:
     a. Tanpa dependency baru dan tanpa CDN saat runtime (font, ikon, CSS). Font hanya system font stack ATAU file `.woff2`
        berlisensi SIL OFL yang di-bundle di `frontend/src/assets/fonts/` beserta file lisensinya. Alasan: aplikasi dibuka
        analis lewat jaringan lab/VPN; request ke CDN pihak ketiga bisa gagal dan membocorkan IP analis.
@@ -66,6 +72,9 @@ harus menjawab salah satu: (1) IP apa? (2) apa bukti tiap sumber? (3) apa keputu
        developer. Tahap 2–4 mengikuti rencana itu; perubahan = tanya dulu. `DESIGN.md` ditulis lewat impeccable setelah
        rencana disetujui.
     h. Self-critique pakai screenshot: jangan menambah Playwright/alat baru; minta developer mengirim screenshot.
+    i. `PRODUCT.md` dan `DESIGN.md` hasil Impeccable boleh di-commit dan ditaruh di `frontend/`; isinya tidak boleh
+       bertentangan dengan dokumen ini. File state, config, dan cache lokal Impeccable (`.impeccable/`) yang dapat memuat
+       path pribadi **tidak** di-commit: periksa `git status` sebelum setiap commit dan tambahkan ke `.gitignore` bila perlu.
 
 Hasil grilling rencana (developer, 2 Nov 2026):
 
@@ -81,7 +90,7 @@ Hasil grilling rencana (developer, 2 Nov 2026):
 16. **Alur MISP tidak teruji di mode mock** (semua hasil mock ber-flag `SUMBER_SIMULASI`, tombol kirim tidak muncul).
     Sebelum sesi uji, developer membuat 1–2 check **live** dengan sadar (masing-masing memakai kuota 1 VirusTotal +
     1 AbuseIPDB). Langkah ini ditulis di README "Uji bersama tim" dan di Cek selesai Tahap 3.
-17. **Status `pending`** tampil kuning "Sedang diproses (pending)", tanpa tombol kirim (kirim ulang atas `pending` selalu
+17. **Status `pending`** tampil abu netral "Sedang diproses (pending)" (bukan kuning; Keputusan 10), tanpa tombol kirim (kirim ulang atas `pending` selalu
     409). Saat ditemukan pada pemuatan ulang, tambah teks "bila tertahan lama, hubungi admin".
 18. **Kasus tepi data.** Riwayat digabung dengan dedup per `id` dan "Muat lagi" disembunyikan memakai `total`.
     `ERROR` `RATE_LIMIT` menampilkan `retry_after_seconds` ("coba lagi ±N detik"). Check lama TASK-01 (hanya
@@ -185,11 +194,13 @@ whitelist; skor tidak dipotong, butuh review analis" · `SUMBER_SIMULASI` (lihat
 3. **Coverage & kesegaran di dekat skor:** `coverage` (x/2), `checked_at`, dan per sumber `retrieved_at`,
    `from_cache` (badge "Cache" / "Ambil baru"), `expires_at`, `source_time` + `source_time_type` (`last_report` →
    "laporan terakhir", `last_analysis` → "analisis terakhir"; null → "tidak tersedia").
-4. **`SUMBER_SIMULASI` mencolok** di strip ringkasan dan di setiap baris riwayat (kuning bergaris/berbingkai tebal +
-   teks "SIMULASI · bukan data nyata"). Tombol kirim MISP untuk check ini **tidak ditampilkan**; ganti teks "Hasil simulasi
-   tidak boleh dikirim ke MISP".
-5. **Kegagalan tidak pernah tampil sebagai sukses.** `failed`/501/502 → merah dengan `error_message`. `mock_sent` →
-   "Terkirim (mock)" + `misp_event_uuid` (berawalan `MOCK-`), bukan "terkirim ke MISP".
+4. **`SUMBER_SIMULASI` mencolok** di strip ringkasan dan di setiap baris riwayat (warna khusus non-verdict, yaitu ungu,
+   bergaris diagonal dan berbingkai tebal + teks "SIMULASI · bukan data nyata"; bukan kuning karena kuning warna verdict
+   `PERLU_PEMERIKSAAN`). Tombol kirim MISP untuk check ini **tidak ditampilkan**; ganti teks "Hasil simulasi tidak boleh
+   dikirim ke MISP".
+5. **Kegagalan tidak pernah tampil sebagai sukses.** `failed`/501/502 → merah (pengecualian Keputusan 10: chip berbingkai
+   + ikon ✕ + teks "Gagal") dengan `error_message`. `mock_sent` → chip netral "Terkirim (mock)" + `misp_event_uuid`
+   (berawalan `MOCK-`), bukan "terkirim ke MISP". `sent` → chip netral + ikon centang + teks "Terkirim ke MISP". Tanpa hijau.
 6. **Identifier pakai font monospace** (IP, `misp_event_uuid`).
 7. **Data pihak ketiga dirender sebagai teks** (React escaping biasa). **Dilarang** `dangerouslySetInnerHTML`.
 8. **Label = teks + warna**, tidak pernah warna saja.
@@ -277,7 +288,7 @@ dicetak. `dev:lan` hanya dijalankan bila `npm audit` penuh tidak memuat advisory
 ## Tahap 1 — API client, tipe, login, shell layout
 
 **Kerjakan:**
-0. **Rencana desain dulu, kode UI belakangan (Keputusan 13g).** `PRODUCT.md` sudah ada. Jalankan impeccable dengan dokumen
+0. **Rencana desain dulu, kode UI belakangan (Keputusan 13g).** `PRODUCT.md` sudah ada (di `frontend/`, Keputusan 13i). Jalankan Impeccable dengan dokumen
    ini sebagai brief, tulis "Keputusan desain" di `TASK-03-progress.md` (4–6 warna hex bernama, tipografi + perannya,
    layout ASCII, prinsip), lalu **berhenti dan tunggu persetujuan developer**. Baru setelah disetujui, tulis `DESIGN.md`
    lewat impeccable dan lanjut ke butir 1. Tahap 2–4 mengikuti rencana itu; perubahan = tanya dulu.
@@ -367,7 +378,7 @@ Tampilan mengikuti "Keputusan desain" yang disetujui (Keputusan 13g).
      (Keputusan 14, 21). Jangan memakai kata "duplikat".
    - Saat mengirim: tombol "Mengirim…" dan **tidak bisa diklik dua kali** (backend juga mencegah duplikat per `check_id`).
    - 201/200 `mock_sent` → "Terkirim (mock)" + `misp_event_uuid` + waktu + pengirim. `sent` → "Terkirim ke MISP".
-   - `pending` → kuning "Sedang diproses (pending)", tanpa tombol kirim; bila ditemukan saat memuat ulang, tambah
+   - `pending` → abu netral "Sedang diproses (pending)", tanpa tombol kirim; bila ditemukan saat memuat ulang, tambah
      "bila tertahan lama, hubungi admin" (Keputusan 17).
    - 409 → muat ulang `/iocs`, tampilkan submission yang sudah ada (bukan error merah).
    - 422 → pesan `detail` backend di dekat form. 501/502 → merah, `error_message`, tombol **Kirim ulang** (form alasan
@@ -378,7 +389,7 @@ Tampilan mengikuti "Keputusan desain" yang disetujui (Keputusan 13g).
    `failed` merah), `misp_event_uuid`, pengirim, alasan (dipotong, klik untuk lengkap), `error_message`. **[NANTI]** Klik baris → buka
    check terkait di Workbench.
 5. Test Vitest: pemetaan status submission → teks/warna (`mock_sent` tidak pernah "Terkirim ke MISP"; `failed` merah;
-   `pending` kuning tanpa tombol kirim) dan pencocokan submission per `check_id` vs per `ip` (teks konfirmasi tidak
+   `pending` abu netral tanpa tombol kirim) dan pencocokan submission per `check_id` vs per `ip` (teks konfirmasi tidak
    memuat kata "duplikat").
 
 **Cek selesai:** gerbang hijau. Manual: (a) analyst dengan izin kirim **check live yang dibuat sengaja sebelum sesi**

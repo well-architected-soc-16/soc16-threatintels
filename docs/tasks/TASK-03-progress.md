@@ -8,7 +8,7 @@ Diperbarui: 2026-11-02. Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-front
 |---|---|---|---|
 | Rencana | Rencana TASK-03, keputusan grilling (Keputusan 13-28), `PRODUCT.md` | #30 | Selesai, ter-merge |
 | 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | #31 | Selesai, ter-merge; uji LAN proxy, `:8000`, dan `/@fs` (12 dari 12 varian 403) lolos |
-| 1 | Rencana desain, API client, login, shell layout | | Rencana desain ditulis, **menunggu persetujuan developer**; kode UI belum ditulis |
+| 1 | Rencana desain, API client, login, shell layout | | Rencana desain **disetujui dengan perubahan** (2 Nov); kode UI dalam pengerjaan |
 | 2 | Cek IP, bukti, riwayat | | Belum |
 | 3 | Kirim ke MISP, tampilan Kiriman MISP | | Belum |
 | 4 | Bukti demo, uji akses negatif, polish, README | | Belum |
@@ -70,9 +70,9 @@ Jadi uji Keputusan 26 terpenuhi penuh lewat IP LAN dari perangkat lain (12 dari 
 3. **Rentang `^` di `package.json`.** Reproduksibilitas dijamin `package-lock.json` dan `npm ci`; `npm install` tanpa lockfile bisa menarik versi minor yang lebih baru.
 4. **Warning deprecation Starlette/httpx** di pytest (`starlette.testclient` menyarankan `httpx2`) sudah ada sebelum tahap ini; tidak disentuh.
 
-## Tahap 1 — Keputusan desain (menunggu persetujuan developer)
+## Tahap 1 — Keputusan desain (disetujui developer dengan perubahan, 2 Nov 2026)
 
-Status: **DRAF, belum disetujui.** Belum ada kode UI. Sesuai Keputusan 13g, Tahap 1 berhenti di sini sampai developer menyetujui atau mengubah rencana ini. Setelah disetujui, Tahap 2–4 mengikuti rencana ini; perubahan = tanya dulu.
+Status: **DISETUJUI dengan perubahan** (lihat "Keputusan developer atas rencana" di bawah: simulasi memakai ungu, `pending` abu netral, merah untuk kegagalan dicatat sebagai pengecualian Keputusan 10). Tahap 2–4 mengikuti rencana ini; perubahan = tanya dulu.
 
 ### Dasar dan batas
 
@@ -92,7 +92,7 @@ Status: **DRAF, belum disetujui.** Belum ada kode UI. Sesuai Keputusan 13g, Taha
 | Teks redup | `#9FADBD` | label sekunder, keterangan, waktu | 7,43:1 pada Panel |
 | Aksen | `#5AA2FF` | **hanya** elemen interaktif: tombol utama, tautan, tab aktif, cincin fokus | 6,51:1 pada Panel; teks gelap `#06101C` di atas tombol Aksen 7,32:1 |
 
-Seluruh antarmuka **tanpa hijau**, termasuk untuk "sukses" (lihat Risiko 1). Kontras pembatas dekoratif sengaja rendah (≈1,3:1); batas yang dibutuhkan untuk mengenali kontrol memakai Garis penuh.
+Seluruh antarmuka **tanpa hijau**, termasuk untuk "sukses" (keputusan developer 1). Kontras pembatas dekoratif sengaja rendah (≈1,3:1); batas yang dibutuhkan untuk mengenali kontrol memakai Garis penuh.
 
 ### Warna semantik (wajib dari Aturan tampilan, di luar hitungan 6)
 
@@ -105,10 +105,13 @@ Label selalu **teks + warna** (Aturan tampilan 8). Kolom "Chip" untuk daftar/riw
 | `TINGGI` | `#FFA347` / `#33200C` (oranye) | 7,82:1 | `#1A0F02` / `#F08A24` | 7,52:1 |
 | `SANGAT_TINGGI` | `#FF8A80` / `#3D1517` (merah) | 6,98:1 | `#FFFFFF` / `#C4262E` | 5,73:1 |
 | `null` → "N/A" | `#B4C0CE` pada Panel, **batas putus-putus** | 9,19:1 | `#B4C0CE`, tanpa isi, batas putus-putus | 9,19:1 |
-| `SUMBER_SIMULASI` | `#F5D547` / `#2B2610` + **bingkai tebal bergaris diagonal** + teks "SIMULASI · bukan data nyata" | 10,44:1 | sama, membingkai seluruh strip | 10,44:1 |
-| Gagal (`failed`, 501/502, sumber `ERROR`) | `#FF8A80` / `#3D1517` + glif "✕" + kotak berbatas | 6,98:1 | n/a | n/a |
-| `pending` | gaya kuning `PERLU_PEMERIKSAAN` + teks "Sedang diproses (pending)" | 10,44:1 | n/a | n/a |
-| Terkirim (`mock_sent`/`sent`) | chip **berbatas Garis tanpa isi**, teks `#E6EBF1`, tanpa hijau | 14,16:1 | n/a | n/a |
+| `SUMBER_SIMULASI` (warna khusus non-verdict, **ungu**) | teks `#E9D5FF` / latar `#2A1A40`, bingkai tebal 4px bergaris diagonal `#C084FC`/`#2A1A40`, teks "SIMULASI · bukan data nyata" | teks 11,68:1; garis `#C084FC` 7,00:1 pada Tanah; pola 6,02:1 | sama, membingkai seluruh strip | 11,68:1 |
+| Gagal (`failed`, 501/502, sumber `ERROR`; pengecualian Keputusan 10) | teks dan batas `#FF8A80` **tanpa isi** + glif "✕" + teks "Gagal" | 8,11:1 pada Tanah, 7,44:1 pada Panel | n/a | n/a |
+| `pending` | abu netral: teks `#B4C0CE` pada Panel, batas Garis, glif "…" + teks "Sedang diproses (pending)" | 9,19:1 | n/a | n/a |
+| Terkirim `mock_sent` | chip **berbatas Garis tanpa isi**, teks `#E6EBF1` "Terkirim (mock)", tanpa hijau | 14,16:1 | n/a | n/a |
+| Terkirim `sent` | chip netral yang sama + glif "✓" + teks "Terkirim ke MISP" | 14,16:1 | n/a | n/a |
+
+Jarak warna ungu simulasi dari Aksen biru (`#5AA2FF`, hue 214°): `#C084FC` hue 270°, ΔE76 ≈ 40 (jelas berbeda untuk penglihatan normal). Pasangan ungu–biru mudah tertukar bagi penderita buta warna, karena itu pembedanya **tidak boleh hanya warna**: bingkai tebal bergaris diagonal dan teks tetap wajib. Aksen hanya untuk elemen interaktif; simulasi tidak pernah tampil sebagai tombol atau tautan.
 
 ### Tipografi (tanpa unduhan, tanpa CDN; Keputusan 13a)
 
@@ -195,16 +198,29 @@ Hanya sebagai respons aksi user, 150–200 ms: buka/tutup panel konfirmasi MISP,
 5. Kontrol yang dikenal analis, tanpa kontrol baru untuk gaya.
 6. Terbaca di proyektor 1280×720 dan 1024×768: tidak ada teks di bawah 12px, kontras AA ke atas.
 
-### Risiko dan hal yang perlu keputusan developer
+### Keputusan developer atas rencana (2 Nov 2026)
 
-1. **Tanpa hijau sama sekali**, termasuk "Terkirim (mock)" yang memakai chip netral berbatas. Alasannya hijau dibaca "aman", dan Aturan tampilan melarangnya untuk `RENDAH`; konsistensinya satu aturan. Konsekuensi: keberhasilan kurang "terasa" dibanding gagal. Setuju, atau mau warna sukses terpisah?
-2. **Kuning dipakai tiga arti** (`PERLU_PEMERIKSAAN`, `SUMBER_SIMULASI`, `pending`). Aturan tampilan 4 meminta simulasi "kuning bergaris/berbingkai tebal", jadi dipertahankan; pembeda utamanya bentuk (bingkai diagonal tebal + teks "SIMULASI · bukan data nyata" vs chip polos). Strip bisa menampilkan keduanya sekaligus. Setuju, atau simulasi diberi warna lain (mengubah Aturan tampilan 4)?
-3. **Merah dipakai dua arti** (`SANGAT_TINGGI` dan gagal). Dibedakan oleh bentuk (blok skor solid vs kotak berbatas dengan "✕") dan teks. Bila terasa membingungkan, kegagalan sistem bisa memakai kotak berbatas tanpa isi.
-4. **Font sistem** membuat tampilan sedikit berbeda antar perangkat anggota tim (HP, laptop lain). Itu harga dari tanpa CDN dan tanpa file font. Menambah file `.woff2` ber-lisensi SIL OFL (Keputusan 13a) bisa dilakukan nanti bila diinginkan; **tanya dulu**.
-5. **Hitungan warna:** inti 6, ditambah palet semantik 7 keadaan yang diwajibkan Aturan tampilan. Dibaca "4–6 warna" pada Keputusan 13g untuk palet visual saja; semantik dihitung terpisah.
-6. **Pada 1024px** panel tengah hanya ±528px (rel 232 + 264). Strip membungkus dua baris; tabel bukti di tab harus bisa menggulir horizontal atau membungkus. Diuji di Tahap 4.
+1. **Tanpa hijau sama sekali: disetujui.** `mock_sent` = chip netral berbatas "Terkirim (mock)". `sent` (MISP asli) juga netral, dengan glif centang dan teks "Terkirim ke MISP".
+2. **DIUBAH: `SUMBER_SIMULASI` dan `pending` tidak memakai kuning.** Kuning adalah warna verdict (`PERLU_PEMERIKSAAN`) dan Keputusan 10 membatasi warna verdict hanya untuk label indikasi. Simulasi memakai satu warna khusus non-verdict (ungu) + pola diagonal + bingkai tebal + teks "SIMULASI · bukan data nyata", cukup berbeda dari biru Aksen (tabel di atas). `pending` memakai abu netral + teks "Sedang diproses (pending)". Aturan tampilan 4 di `TASK-03-frontend-workbench.md` sudah diperbarui, kontras dihitung ulang.
+3. **Merah untuk `failed`: disetujui sebagai PENGECUALIAN eksplisit Keputusan 10** (status kegagalan, bukan verdict). Bentuk berbeda: `failed` = chip berbingkai tanpa isi + ikon ✕ + teks "Gagal"; `SANGAT_TINGGI` = chip terisi + teks label. Tercatat di Keputusan 10 dan Aturan tampilan 5.
+4. **System font stack disetujui** untuk sans dan monospace. `.woff2` SIL OFL hanya bila diminta nanti (tanya dulu).
+5. **6 warna inti + 7 keadaan semantik diterima**; undian arah (concept tournament) tidak dijalankan, disetujui.
+6. **Plugin Impeccable**, bukan `frontend-design` resmi, dipilih dengan sengaja: github.com/pbakaus/impeccable, Apache-2.0, versi **4.8.0** (`SKILL.md` dan `impeccable --version` terpasang). Keputusan 13 diperbarui; butir 13a–13h tetap, 13i ditambahkan.
+
+Catatan verifikasi untuk butir 6: yang dibaca dari berkas terpasang adalah `version: 4.8.0` dan `license: Apache 2.0` di `~/.claude/skills/impeccable/SKILL.md`, serta URL repo yang disebut di berkas skill. Impeccable terpasang sebagai skill mandiri di `~/.claude/skills/` (tidak tercantum di `installed_plugins.json`), sehingga tidak tampil di `/plugin`. `scripts/VERSION` berisi `0.1.18` (kemungkinan versi mesin pendukung, bukan versi plugin); lisensi dan repo tidak diverifikasi di luar berkas lokal.
+
+### Risiko yang tersisa
+
+- **Pada 1024px** panel tengah hanya ±528px (rel 232 + 264). Strip membungkus dua baris; tabel bukti di tab harus bisa menggulir horizontal atau membungkus. Diuji di Tahap 4.
+- **Ungu dan biru** mudah tertukar bagi penderita buta warna; ditutup oleh pola, bingkai tebal, dan teks, bukan warna saja. Perlu dicek lewat screenshot di Tahap 4.
+
+### Lokasi berkas Impeccable (Keputusan 13i)
+
+- `PRODUCT.md` dipindah ke `frontend/PRODUCT.md`; `DESIGN.md` nanti di `frontend/DESIGN.md`. Keduanya boleh di-commit.
+- Dengan `PRODUCT.md` di `frontend/`, root proyek Impeccable adalah `frontend/`. Jalankan dari `frontend/` atau beri `--target frontend/...`; dari root repo tanpa `--target`, `impeccable context` tidak menemukannya (diuji).
+- `.impeccable/` (state, config, cache lokal) masuk `.gitignore` sebagai pencegahan. Bila nanti `DESIGN.md` membutuhkan `.impeccable/design.json` di repo, periksa isinya (tidak boleh memuat path pribadi) sebelum meng-commit-nya dengan sengaja.
 
 ### Setelah disetujui
 
-- Tahap 1 membangun login dan shell sesuai rencana ini, lalu `DESIGN.md` ditulis dari shell yang sudah jadi (lewat impeccable, `impeccable-documenter`), bukan sebelum kode.
+- Tahap 1 membangun login dan shell sesuai rencana ini, lalu `DESIGN.md` ditulis dari shell yang sudah jadi (lewat Impeccable, `impeccable-documenter`), bukan sebelum kode.
 - Bukti tampilan: developer mengirim screenshot (Keputusan 13h); tidak ada Playwright atau alat baru.
