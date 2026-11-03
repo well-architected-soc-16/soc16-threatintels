@@ -430,23 +430,33 @@ Dikerjakan di branch `feat/task-03-tahap-3-kirim-misp-kiriman`. Tidak ada peruba
 
 ### "Cek selesai" Tahap 3 — langkah untuk developer
 
-Keadaan DB dev (dibaca agen, hanya-baca): ada tiga check non-simulasi (id 1 dan 2 `TIDAK_TERSEDIA`, id 3 `118.25.6.39` `COMPLETE`) dan **satu kiriman**: check #3 sudah `mock_sent` (oleh `admin`, 31 Okt). Artinya check #3 **tidak bisa** dipakai untuk uji "kirim pertama kali"; ia cocok untuk uji "status sudah ada" dan sebagai dasar uji konfirmasi IP yang sama.
+Keadaan DB dev (dibaca agen, hanya-baca): ada tiga check non-simulasi (id 1 `8.8.8.8` dan id 2 `1.1.1.1`, keduanya `TIDAK_TERSEDIA` buatan TASK-01/02 tanpa flag simulasi; id 3 `118.25.6.39` `COMPLETE`) dan **satu kiriman**: check #3 sudah `mock_sent` (oleh `admin`, 31 Okt). Backend hanya menolak check `INPUT_DITOLAK` atau `SUMBER_SIMULASI`, jadi check #1 dan #2 **bisa dikirim** dan belum punya kiriman. Check #3 tidak bisa dipakai untuk "kirim pertama kali"; ia cocok untuk uji "status sudah ada" dan sebagai dasar uji konfirmasi IP yang sama.
+
+**Catatan kompromi:** mengirim check #1 atau #2 menghabiskannya selamanya (`UNIQUE(check_id)`), dan keduanya check tanpa data sumber (`TIDAK_TERSEDIA`). Itu pilihan murah untuk DB dev; bila ingin data yang bermakna, pakai check live baru (langkah b).
 
 Agen **belum** menjalankan apa pun di peramban untuk Tahap 3 (butuh akun sementara, peramban, dan, untuk (a)/(b), mode live yang memakai kuota). Langkah:
 
-a. **Kirim pertama kali (butuh check live baru).** Setel `SOURCES_MODE=live` (README "Mengaktifkan mode live"), buat ulang kontainer `api`, lalu cek **satu IP publik yang belum pernah dikirim** (bukan 118.25.6.39). Login analyst ber-`can_send_misp`: form MISP muncul; isi alasan ≥ 10 karakter, tag `tlp:amber, ioc`, kirim → "Terkirim (mock)" + `MOCK-…` + waktu + pengirim. Klik tombol dua kali cepat: hanya satu baris di tampilan Kiriman MISP.
-b. **Konfirmasi IP yang sama.** Dengan mode live, "Cek ulang" atas IP yang baru dikirim (hasil dari cache bila belum kedaluwarsa, kuota tidak terpakai) → check baru → "Kirim ke MISP" → panel inline "IP ini sudah pernah dikirim lewat check #N (mock_sent). Kirim lagi sebagai catatan baru?" muncul **sebelum** terkirim. "Batal" mengembalikan form; "Kirim lagi sebagai catatan baru" menambah satu baris di Kiriman MISP.
+a. **Kirim pertama kali (tanpa kuota, mode mock cukup).** Login analyst ber-`can_send_misp`, pilih check #1 atau #2 dari riwayat (keduanya tidak berbadge SIMULASI). Form MISP muncul; isi alasan ≥ 10 karakter, tag `tlp:amber, ioc`, kirim → "Terkirim (mock)" + `MOCK-…` + waktu + pengirim. Klik tombol dua kali cepat: hanya satu baris di tampilan Kiriman MISP.
+b. **Konfirmasi IP yang sama (butuh `SOURCES_MODE=live`, memakai kuota satu pasang bila cache sudah kedaluwarsa).** Setel `SOURCES_MODE=live` (README "Mengaktifkan mode live"), buat ulang kontainer `api`, lalu "Cek ulang" atas `118.25.6.39` → check baru (live) → "Kirim ke MISP" → panel inline "IP ini sudah pernah dikirim lewat check #3 (mock_sent). Kirim lagi sebagai catatan baru?" muncul **sebelum** terkirim. "Batal" mengembalikan form; "Kirim lagi sebagai catatan baru" menambah satu baris di Kiriman MISP. Kembalikan ke `mock` sesudahnya. (Di mode mock "Cek ulang" membuat check bersimulasi tanpa tombol kirim, jadi konfirmasi tidak bisa dicapai.)
 c. **Check simulasi** (mode mock, mis. `1.1.1.1`): tidak ada form, tampil "Hasil simulasi tidak boleh dikirim ke MISP." Paksa lewat Swagger `POST /iocs/misp` dengan `check_id` itu → 422.
 d. **Alasan 5 karakter**: pesan "Alasan minimal 10 karakter (sekarang 5)." di bawah kolom, fokus pindah ke kolom, tidak terkirim (tab Network tidak memuat `POST /iocs/misp`). **Viewer**: tidak ada form; check #3 menampilkan "Terkirim (mock)" (read-only). **Analyst tanpa izin**: teks "butuh izin dari admin", tanpa form.
 e. **Tampilan Kiriman MISP** (semua peran): tabel menampilkan kiriman #1 (check #3) dengan IP monospace, `MOCK-…`, pengirim, alasan; "Buka check #3" membuka check itu di Workbench. Pada 1024px tabel bisa digulir horizontal.
 f. **Keyboard**: pada konfirmasi inline, fokus pindah ke panel lalu Tab ke "Kirim lagi sebagai catatan baru" dan "Batal"; setelah "Batal" fokus kembali ke tombol kirim.
-g. **Yang tidak bisa dicapai lewat UI** dan hanya diuji otomatis: `pending` (kiriman tertahan), `failed` 501/502 (butuh `MISP_MODE=live` atau gangguan; `MISP_MODE=live` sekarang menjawab 501 dengan badan `IocOut` `failed`, jadi mengubah `.env` `MISP_MODE=live` memungkinkan melihat jalur merah + "Kirim ulang" — kembalikan ke `mock` sesudahnya).
+g. **Jalur gagal dan kirim ulang tanpa duplikat (tanpa kuota).** Pakai check #1 atau #2 yang belum dikirim (yang tidak dipakai di langkah a). Setel `MISP_MODE=live` di `.env` dan buat ulang kontainer `api` (lencana top bar menjadi "MISP: live"). Kirim → backend menjawab 501: chip berbingkai merah ✕ "Gagal" + `error_message`, tombol berubah "Kirim ulang", isian form **tetap ada**. Ubah isian lalu kirim lagi → tetap gagal, isian tetap. Kembalikan `MISP_MODE=mock`, buat ulang kontainer, tekan "Kirim ulang" → 200, "Terkirim (mock)" pada **baris yang sama**; tampilan Kiriman MISP hanya punya satu baris untuk check itu. Ini bukti aturan CLAUDE.md "retry tidak menggandakan data" secara end-to-end.
+h. **Yang hanya teruji otomatis**: `pending` (kiriman tertahan; tidak bisa dibuat lewat UI) dan 502 dari MISP asli.
 
 ## Known gaps baru (Tahap 3)
 
 1. **Draf form hilang saat berpindah check** (state form per check, tidak disimpan; tambahan atas gap 14 rencana yang menyangkut sesi habis).
 2. **Pencocokan status memakai kiriman yang sudah dimuat** (100 terbaru + halaman tambahan yang dimuat user). 409 untuk kiriman yang lebih tua ditangani dengan keterangan netral, tanpa detail kiriman (tidak ada `GET /iocs/{id}`).
-3. **`pending` tertahan dan kiriman `failed` 501/502 hanya teruji otomatis**, tidak lewat UI mode mock (butuh `MISP_MODE=live` untuk 501).
+3. **`pending` tertahan hanya teruji otomatis** (tidak bisa dibuat lewat UI); 502 dari MISP asli juga belum teruji karena klien live belum ada. Jalur 501 `failed` dan kirim ulang bisa diuji lewat UI dengan `MISP_MODE=live` (langkah g).
 4. **Kabel izin di `Shell` tidak teruji otomatis** (satu mutan selamat): hanya tercakup uji manual (d). Penegakan sebenarnya tetap 403 backend (bukti KM-8 di Tahap 4).
 5. **Tabel Kiriman MISP menampilkan semua baris yang dimuat tanpa penyaring** (backend tanpa filter); untuk tim 4 orang cukup.
 6. **Konfirmasi IP yang sama mengandalkan string IP persis sama** (`check.ip === item.ip`); backend sudah menormalkan IPv4, jadi cukup.
+7. **Fokus keyboard hilang setelah kirim**: tombol kirim `disabled={sending}` sehingga fokus jatuh ke `<body>` begitu pengiriman selesai (pola sama dengan gap 11 Tahap 2: "Cek ulang"). Form dikunci dengan `readOnly` saat konfirmasi, tetapi tombol kirim belum. Perbaikan nanti: `aria-disabled` atau pemulihan fokus eksplisit.
+8. **Komponen MISP belum pernah dijalankan di peramban** oleh agen (hanya render statis, store, dan kontrak). Pada Tahap 2 uji peramban menemukan dua bug yang lolos uji unit; ulangi untuk Tahap 3 (perpindahan fokus, isian form setelah 501, alur konfirmasi, tata letak form di rel 232px).
+
+### Keputusan agen yang meminta persetujuan developer
+
+1. **Kiriman `failed` pada check lain tidak memicu konfirmasi** (keputusan 4). Pembacaan polos Keputusan 14 "(<status>)" mencakup `failed` sehingga analis melihat "(failed)". Mengembalikannya = satu baris di `findSameIpElsewhere` plus membalik satu uji.
+2. **Form disembunyikan bila `GET /iocs` gagal** (keputusan 3), bukan ditampilkan dengan peringatan.
