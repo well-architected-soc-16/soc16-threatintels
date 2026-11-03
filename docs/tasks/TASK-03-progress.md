@@ -10,7 +10,7 @@ Diperbarui: 2026-11-03 (Tahap 3). Rujukan: [`TASK-03-frontend-workbench.md`](TAS
 | 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | #31 | Selesai, ter-merge; uji LAN proxy, `:8000`, dan `/@fs` (12 dari 12 varian 403) lolos |
 | 1 | Rencana desain, API client, login, shell layout | #32 | Selesai, ter-merge. Uji manual developer lolos (3 Nov) |
 | 2 | Cek IP, bukti, riwayat | #33 | Selesai, ter-merge. Seluruh langkah "Cek selesai" 1-12 lulus (developer: 1-4 dan 9; agen di Brave headless: 5-8 dan 10-12) |
-| 3 | Kirim ke MISP, tampilan Kiriman MISP | | Selesai di branch lokal. Uji developer (a, c, d, e sebagian) dan uji peramban agen (klik ganda, konfirmasi, fokus, mode live: kirim gagal 501, kirim ulang, konfirmasi IP yang sama) lulus; menunggu jawaban dua keputusan agen dan "push" |
+| 3 | Kirim ke MISP, tampilan Kiriman MISP | | Selesai di branch lokal. Uji developer (a, c, d, e sebagian) dan uji peramban agen (klik ganda, konfirmasi, fokus, mode live: kirim gagal 501, kirim ulang, konfirmasi IP yang sama) lulus; dua keputusan agen disetujui apa adanya (4 Nov); PR dibuka |
 | 4 | Bukti demo, uji akses negatif, polish, README | | Belum |
 
 Hasil terakhir (Tahap 3): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**376 passed**, 18 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_|window.confirm|innerHTML` di `frontend/src` kosong (exit 1).
@@ -509,6 +509,8 @@ Pembersihan: 2 kiriman dan 2 check uji dihapus (sisa kiriman: #1 milik check #3)
 10. **Tabel Kiriman MISP perlu gulir horizontal di 1280px** (kolom utama sekitar 650px, tabel `min-w-[56rem]`): kolom Alasan dan Keterangan tersembunyi di sisi kanan sampai digulir, padahal Alasan penting untuk analis. Polish Tahap 4: kolom lebih ramping (UUID dipotong atau Waktu/IP digabung) atau tata letak kartu per baris.
 
 ### Keputusan agen yang meminta persetujuan developer
+
+Disetujui developer apa adanya dengan perintah "Oke push" (4 Nov 2026).
 
 1. **Kiriman `failed` pada check lain tidak memicu konfirmasi** (keputusan 4). Pembacaan polos Keputusan 14 "(<status>)" mencakup `failed` sehingga analis melihat "(failed)". Mengembalikannya = satu baris di `findSameIpElsewhere` plus membalik satu uji.
 2. **Form disembunyikan bila `GET /iocs` gagal** (keputusan 3), bukan ditampilkan dengan peringatan.
