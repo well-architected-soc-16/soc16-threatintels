@@ -225,6 +225,12 @@ Pola WAI-ARIA: `role="tablist"`, tab aktif bergaris bawah 2px Biru Aksen, tab la
 ### Riwayat
 Daftar tombol selebar rel: baris pertama IP (mono) dan skor/N/A (tabular), baris kedua chip label, baris ketiga waktu WIB (Caption), lalu tag simulasi. Baris terpilih berbatas Biru Aksen. Penyaring IP di atas daftar bertuliskan "Menyaring yang sudah dimuat"; "Muat lagi" hanya muncul bila yang dimuat kurang dari total.
 
+### Kiriman MISP (rel keputusan)
+Bagian "MISP" di rel kanan berurutan: status kiriman check ini (chip, `MOCK-…` mono, pengirim, waktu WIB, alasan, tag) → form (kolom Alasan dengan penghitung `n/2000 karakter, minimal 10`, kolom Tag mono, tombol primer selebar rel, catatan "Pengiriman manual. Tidak memblokir IP.") → galat/keterangan. Status memakai chip yang sudah ada: netral untuk `pending`, `mock_sent`, `sent` (dengan ✓ hanya untuk `sent`); `failed` = chip kegagalan (bingkai Gagal + ✕). Konfirmasi IP yang sama adalah kotak berbatas Garis berlatar Tanah di dalam form, dengan dua tombol selebar rel; tanpa jendela modal. Galat kirim = kotak berbingkai Gagal bergaris ✕ (`role="alert"`); keterangan netral (409 di luar daftar) = teks Redup.
+
+### Tabel Kiriman MISP
+Tabel polos di area utama: kepala Panel dengan Semibold, baris dipisah garis tipis, tujuh kolom, dalam area gulir horizontal berbingkai tipis yang dapat difokus. Teks selalu Caption/Dense (≥ 12px). Alasan panjang dipotong dengan tombol teks bergaris bawah berwarna aksen.
+
 ### Peringatan HASIL_BERBEDA
 Kotak berbatas Teks tanpa warna verdict (kuning dipakai label), berisi kalimat penjelasan flag.
 
