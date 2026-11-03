@@ -1,6 +1,6 @@
 # TASK-03 — Progress
 
-Diperbarui: 2026-11-03. Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-frontend-workbench.md), issue #28.
+Diperbarui: 2026-11-03 (Tahap 2). Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-frontend-workbench.md), issue #28.
 
 ## Status per tahap
 
@@ -8,12 +8,12 @@ Diperbarui: 2026-11-03. Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-front
 |---|---|---|---|
 | Rencana | Rencana TASK-03, keputusan grilling (Keputusan 13-28), `PRODUCT.md` | #30 | Selesai, ter-merge |
 | 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | #31 | Selesai, ter-merge; uji LAN proxy, `:8000`, dan `/@fs` (12 dari 12 varian 403) lolos |
-| 1 | Rencana desain, API client, login, shell layout | PR ini | Selesai, menunggu merge. Uji manual developer lolos (3 Nov), kode dan test hijau |
-| 2 | Cek IP, bukti, riwayat | | Belum |
+| 1 | Rencana desain, API client, login, shell layout | #32 | Selesai, ter-merge. Uji manual developer lolos (3 Nov) |
+| 2 | Cek IP, bukti, riwayat | | Selesai di branch lokal; **menunggu uji manual developer** (7 IP demo, 4 input ditolak, viewer, salin via `dev:lan`) dan "push" |
 | 3 | Kirim ke MISP, tampilan Kiriman MISP | | Belum |
 | 4 | Bukti demo, uji akses negatif, polish, README | | Belum |
 
-Hasil terakhir (Tahap 1): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**92 passed**, 9 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_` di `frontend/src` kosong.
+Hasil terakhir (Tahap 2): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**253 passed**, 15 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_` di `frontend/src` kosong.
 
 ## Tahap 0
 
@@ -286,3 +286,67 @@ Agen tidak memegang password akun seed, jadi login nyata dan paksa-401 belum diu
 5. ~~Kalimat deskriptif `DESIGN.md` belum dikonfirmasi~~ **dikonfirmasi developer: tetap** (3 Nov).
 6. **Sidecar `.impeccable/design.json` tidak ada**; live mode Impeccable tidak dikonfigurasi. Bila nanti dibutuhkan, periksa isinya (tanpa path pribadi) sebelum di-commit.
 7. **Panel samping tidak setinggi area utama di desktop** (polish, dijadwalkan di Tahap 4). Perbaikan kemungkinan: `lg:self-stretch` dengan isi yang sticky di dalamnya, atau latar Panel pada kolom grid.
+
+## Tahap 2 — Pelaksanaan
+
+Dikerjakan di branch `feat/task-03-tahap-2-workbench-cek-bukti-riwayat`. Tidak ada perubahan backend. Mengikuti "Keputusan desain" yang disetujui.
+
+**Yang dibangun** (`frontend/src`):
+- `lib/format.ts`: `formatScore`, `formatTime`, label indikasi, teks status/reason/flag, bukti defensif, rasio vendor, `buildCopyText`, `pivotLinks`. `lib/history.ts`: merge/dedup/filter riwayat.
+- `api/checks.ts`, `api/guards.ts` (penjaga bentuk `CheckOut`/`CheckPage`), `workbench/store.ts` (alur kerja tanpa framework, dipakai React lewat `useSyncExternalStore`), `workbench/useWorkbench.ts`.
+- Komponen: `SearchBar`, `HistoryRail`, `SummaryStrip` (blok skor + pengukur cakupan), `Tabs` (WAI-ARIA), `SourceTabs` (Ringkasan, AbuseIPDB, VirusTotal, Raw JSON), `EvidencePanel`, `DecisionRail` (cakupan, kesegaran, flag, Cek ulang, Salin hasil, pivot, slot MISP), `Badges`, `tone`; ikon ✓ dan tautan-keluar gambar sendiri; token strip dan `.simulasi-frame` di `index.css`.
+
+### Keputusan dan penyimpangan dari rencana
+
+1. **Alur kerja dalam store tanpa framework** (pola yang sama dengan `performLogin`), karena tidak ada peramban otomatis. Store menjaga: klik ganda diabaikan, token anti-basi untuk detail (klik A lalu B), submit mengalahkan GET detail yang berjalan, hasil `aborted` (logout) diabaikan diam-diam, 401 tidak menampilkan pesan, `offset = jumlah dimuat` dengan dedup per `id`.
+2. **Penjaga bentuk di tepi** (`isCheckOut`/`isCheckPage`). Ditemukan saat test: store menerima balasan 2xx apa pun. Balasan JSON lain yang lolos (gateway, versi backend berbeda) kini ditolak dengan pesan "respons tidak terbaca", bukan membuat tampilan crash. Pada submit, pesan menyuruh memeriksa riwayat karena pengecekan mungkin sudah tersimpan di server.
+3. **Butir [NANTI] yang dikerjakan:** Raw JSON, penyaring IP client-side ("menyaring yang sudah dimuat"), Salin hasil, dan tautan pivot. **Yang dilewati: bar 0-100 untuk `abuseConfidenceScore`.** Alasannya: Aturan tampilan 9 melarang grafik dan `craft-floor.md` menolak bar yang menggantikan isi; angkanya sudah tampil sebagai teks.
+4. **Tautan pivot belum diverifikasi dari dokumentasi resmi.** AbuseIPDB `https://www.abuseipdb.com/check/<ip>` hanya terkonfirmasi dari contoh di [proyek pihak ketiga](https://github.com/df2k2/magento2-abuse-api); VirusTotal `https://www.virustotal.com/gui/ip-address/<ip>` hanya dari [satu issue GitHub (misp-modules #644)](https://www.github.com/MISP/misp-modules/issues/644). Tautan dibuat hanya dari `check.ip` berbentuk IPv4, di-encode, dan `target="_blank" rel="noopener noreferrer"`. Penutupnya: developer mengklik keduanya.
+5. **Salin hasil di sesi `dev:lan` pasti memakai cadangan.** `navigator.clipboard` hanya ada di konteks aman (HTTPS atau localhost). Lewat `http://<IP-laptop>:5173` ia tidak ada, sehingga tombol menampilkan teks yang sudah terpilih di `<textarea>` readonly (jalur normal, bukan galat). Perlu diuji lewat `dev:lan`, bukan hanya di localhost.
+6. **Badge cache hanya bila `retrieved_at` ada.** Check lama TASK-01 datang dengan `from_cache: false` bawaan; tanpa penjagaan ini semuanya salah berlabel "Ambil baru".
+7. **Bukti sumber dibaca defensif:** field bertipe salah menjadi "—", kunci VirusTotal yang hilang menjadi "—" (bukan 0) dengan catatan rasio, penyebut 0 menjadi "tidak ada vendor yang menilai" (bukan `0 / 0` atau `NaN`), key `simulasi` tidak dirender, `lastReportedAt` UTC mentah tidak dirender (waktu dari `source_time`). Kamus status/reason/flag memakai `Object.hasOwn` sehingga kunci seperti `constructor` tidak menarik properti prototipe.
+8. **Chip `SUMBER_SIMULASI` per-sumber disembunyikan** di baris Ringkasan dan tab sumber (sudah ada tag di strip, riwayat, dan rel keputusan; mengulangnya hanya menambah bising).
+9. **Peringatan `HASIL_BERBEDA` netral** (kotak berbatas Teks, tanpa warna), karena kuning milik label verdict.
+10. **Slot MISP di rel kanan** sudah menampilkan "Hasil simulasi tidak boleh dikirim ke MISP." untuk hasil simulasi (Aturan tampilan 4 tidak boleh ditunda); untuk hasil nyata berisi penanda "tersedia pada tahap berikutnya" sampai Tahap 3.
+11. **Pencarian dan klik riwayat memindahkan ke tampilan Workbench** bila sedang di Kiriman MISP, supaya hasil terlihat.
+12. **Kotak pencarian dikosongkan setelah berhasil**, dipertahankan bila gagal (agar mudah dikoreksi). Viewer tidak mendapat kotak pencarian maupun tombol Cek ulang (hanya tampilan; kontrol sebenarnya 403 di backend).
+13. **`useSyncExternalStore` wajib punya `getServerSnapshot`** untuk render server; ditemukan karena test render Shell gagal. Diperbaiki di `useWorkbench`.
+14. **Uji kontrak dengan keluaran ASLI backend.** `src/testing/backend-mock-samples.json` dan `backend-rejected-samples.json` dihasilkan dari kode backend sungguhan (adapter mock + `assess` + skema respons) di kontainer `api`, tanpa database dan tanpa jaringan; datanya fiktif. Hasilnya cocok dengan tabel IP demo TASK-02 (label, cakupan, flag) dan menggantikan angka tebakan fixture tulis tangan (mis. skor 1.1.1.1 yang sebenarnya `85.5`, bukan `77`). Skrip pembuatnya `src/testing/gen_backend_samples.py` (terbukti menghasilkan keluaran identik). Pembuatan ulang (fish):
+    ```fish
+    docker compose exec -T api python - mock < frontend/src/testing/gen_backend_samples.py > frontend/src/testing/backend-mock-samples.json
+    docker compose exec -T api python - rejected < frontend/src/testing/gen_backend_samples.py > frontend/src/testing/backend-rejected-samples.json
+    ```
+15. **Pelajaran dari Tahap 1 diterapkan:** baseline dijalankan sebelum uji mutasi, dan uji mutasi massal (14 perusakan: skor null jadi nol, label null jadi RENDAH, penjaga cache, `+00:00` berlabel WIB, simulasi dimatikan, penjaga IPv4 pivot, penyebut 0, XSS lewat HTML mentah, Cek ulang untuk viewer, teks larangan MISP, "Muat lagi" tanpa batas, dedup riwayat, klik ganda submit, respons detail basi) semuanya **tertangkap**. Satu percobaan awal gagal dijalankan karena pola pencarian saya salah, bukan karena test lemah, lalu diulang dengan pola benar dan tertangkap.
+
+### Bukti uji otomatis
+
+- 253 test Vitest di 15 file. Termasuk: pemformat (skor, label, waktu `+07:00`/`+00:00`, status/reason/flag, bukti, rasio vendor, salin hasil, pivot), riwayat (merge/prepend/filter), penjaga bentuk, store (submit, INPUT_DITOLAK, klik ganda, detail basi, submit vs detail, aborted, 401, `loadMore`), render komponen untuk tujuh IP demo dan check lama TASK-01, RBAC tampilan (viewer tanpa pencarian dan Cek ulang), kasus XSS, dan uji kontrak dengan keluaran asli backend.
+- Smoke dev server (`npm run dev`, localhost): 16 modul baru ter-compile (HTTP 200), log bebas error, proxy dan 401 tanpa token terbaca; dihentikan setelahnya.
+
+### "Cek selesai" Tahap 2 — langkah developer (belum dijalankan)
+
+Agen tidak punya password akun seed dan tidak ada peramban, jadi bagian ini belum diuji di peramban:
+
+1. `docker compose up -d`, lalu `cd frontend; npm run dev` (mode `SOURCES_MODE=mock`, bawaan). Login sebagai admin atau analyst.
+2. **Tujuh IP demo**, satu per satu, screenshot masing-masing: `1.1.1.1` (SANGAT_TINGGI), `1.0.0.1` (HASIL_BERBEDA), `8.8.8.8` (N/A, DATA_TERBATAS 1/2, ERROR TIMEOUT), `8.8.4.4` (N/A, TIDAK_TERSEDIA 0/2), `9.9.9.9` (WHITELISTED, skor tetap), `149.112.112.112` (0.0 + NO_VENDOR_OPINION, **tidak hijau**), `208.67.222.222` (N/A, INSUFFICIENT_DATA). Semua harus berbadge SIMULASI di strip dan di baris riwayat.
+3. **Input ditolak:** `10.10.50.10`, `127.0.0.1`, `2001:db8::1`, `abc` → pesan backend + kode reason di bawah kolom pencarian; panel tengah dan riwayat tidak berubah.
+4. **Viewer:** login sebagai viewer → tidak ada kolom pencarian dan tombol Cek ulang; riwayat dan detail tetap terbaca; "Salin hasil" tetap ada.
+5. **Cek ulang** atas IP yang sama membuat baris baru di riwayat paling atas.
+6. **Klik riwayat** menampilkan detail tanpa membuat pengecekan baru (riwayat tidak bertambah).
+7. **"Muat lagi":** buat lebih dari 20 pengecekan (mock tidak memakai kuota), pastikan tombol memuat halaman berikutnya tanpa baris ganda dan hilang saat semuanya dimuat.
+8. **Salin hasil lewat `dev:lan`** (`npm run dev:lan`, buka `http://<IP-laptop>:5173` dari perangkat lain): tombol harus menampilkan teks terpilih di `<textarea>`; di `localhost` harus langsung "Tersalin".
+9. **Tautan pivot:** klik "AbuseIPDB" dan "VirusTotal" di rel kanan; laporkan bila ada yang 404 (format URL belum terverifikasi resmi).
+10. **Keyboard:** Tab ke daftar tab bukti, panah kiri/kanan dan Home/End berpindah tab; fokus terlihat.
+11. **Screenshot** 1280×720, 1024×768, dan < 1024px dari workbench berisi satu hasil, untuk kritik desain (Keputusan 13h).
+
+## Known gaps baru (Tahap 2)
+
+1. **Uji manual Tahap 2 (langkah 1-11) belum dilakukan.**
+2. **Tautan pivot belum diverifikasi dari dokumentasi resmi** (keputusan 4).
+3. **Tidak ada uji peramban otomatis** (Playwright dilarang, Keputusan 13h): handler klik/submit, fokus, dan penyalinan nyata hanya tercakup lewat store, render markup, dan uji kontrak.
+4. **"Muat lagi" dan penyaring bekerja pada yang sudah dimuat**; tidak ada pencarian penuh karena backend tanpa parameter filter (gap 2 rencana).
+5. **Riwayat mock dan live bercampur** (gap 19 TASK-02); dibedakan hanya oleh tag SIMULASI.
+6. **Detail dari baris riwayat ditampilkan dulu lalu disegarkan** lewat `GET /checks/{id}`; bila GET gagal, data baris tetap tampil bersama pesan galat.
+7. **Bar 0-100 `abuseConfidenceScore` tidak dibuat** (keputusan 3).
+8. **Panel samping tidak setinggi area utama di desktop** (polish Tahap 4; sama dengan gap 7 Tahap 1).
+9. **Berkas kontrak backend adalah potret**: bila adapter mock atau skema berubah, buat ulang dengan skrip (keputusan 14); uji kontrak yang akan gagal lebih dulu.
