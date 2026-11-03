@@ -389,7 +389,7 @@ Aturan sesi:
 - Matikan dengan `Ctrl+C` setelah sesi selesai. Laptop jangan sleep selama sesi.
 - Akun: empat akun hasil `scripts.seed_users` (admin, analyst_misp, analyst, viewer), satu per anggota sesuai peran. Password dibagikan langsung atau lewat Bitwarden, **tidak** ditempel di grup chat atau di repo.
 - Default `SOURCES_MODE=mock` (semua hasil berlabel SIMULASI). Mode live memakai **kuota bersama** (VirusTotal 4/menit dan 500/hari); beri tahu tim sebelum menyalakannya.
-- Alur kirim MISP hanya bisa dicoba pada check **live** (hasil mock tidak boleh dikirim). Sebelum sesi, developer membuat satu atau dua check live dengan sadar (masing-masing memakai kuota 1 VirusTotal dan 1 AbuseIPDB), lalu kembali ke mock.
+- Alur kirim MISP hanya bisa dicoba pada check **live** (hasil mock tidak boleh dikirim). Sebelum sesi, developer membuat satu atau dua check live dengan sadar (masing-masing memakai kuota 1 VirusTotal dan 1 AbuseIPDB), lalu kembali ke mock. Satu check hanya bisa dikirim satu kali (`UNIQUE(check_id)`), jadi siapkan check live baru untuk tiap uji "kirim pertama kali"; "Cek ulang" atas IP yang sama membuat check baru dan memicu konfirmasi inline sebelum terkirim lagi.
 
 ### Struktur backend
 

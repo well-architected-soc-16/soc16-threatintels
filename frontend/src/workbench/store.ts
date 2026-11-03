@@ -43,7 +43,7 @@ export const MESSAGE_EMPTY_IP = 'Masukkan alamat IPv4 publik.'
 export const MESSAGE_UNREADABLE = 'respons server tidak terbaca (bentuk data tidak sesuai).'
 
 // null = tidak ada yang perlu ditampilkan: request dibatalkan (logout) atau 401 (sesi sudah diakhiri oleh klien).
-function failureMessage(failure: ApiFailure, subject: string): string | null {
+export function failureMessage(failure: ApiFailure, subject: string): string | null {
   if (failure.kind === 'aborted' || failure.status === 401) return null
   if (isUnreachable(failure)) return MESSAGE_UNREACHABLE
   if (failure.status === 404) return `${subject} tidak ditemukan.`

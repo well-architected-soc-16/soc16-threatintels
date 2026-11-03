@@ -84,9 +84,11 @@ interface DecisionRailProps {
   canRun: boolean
   submitting: boolean
   onRerun: (ip: string) => void
+  // Isi bagian MISP (status kiriman dan form). Check simulasi tidak memakainya: selalu teks larangan.
+  misp?: ReactNode
 }
 
-export function DecisionRail({ check, canRun, submitting, onRerun }: DecisionRailProps) {
+export function DecisionRail({ check, canRun, submitting, onRerun, misp }: DecisionRailProps) {
   if (check === null) {
     return (
       <>
@@ -198,13 +200,11 @@ export function DecisionRail({ check, canRun, submitting, onRerun }: DecisionRai
         </Section>
       )}
 
-      <Section title="MISP">
-        {simulated ? (
-          <p>Hasil simulasi tidak boleh dikirim ke MISP.</p>
-        ) : (
-          <p className="text-redup">Pengiriman ke MISP tersedia pada tahap berikutnya.</p>
-        )}
-      </Section>
+      {(simulated || misp !== undefined) && (
+        <Section title="MISP">
+          {simulated ? <p>Hasil simulasi tidak boleh dikirim ke MISP.</p> : misp}
+        </Section>
+      )}
     </div>
   )
 }

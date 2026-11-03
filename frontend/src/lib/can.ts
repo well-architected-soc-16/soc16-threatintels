@@ -14,3 +14,10 @@ export function canSendMisp(user: Actor): boolean {
   if (user.role === 'admin') return true
   return user.role === 'analyst' && user.can_send_misp
 }
+
+// Teks pengganti form MISP untuk akun yang tidak boleh mengirim; null bila boleh.
+export function mispDeniedText(user: Actor): string | null {
+  if (canSendMisp(user)) return null
+  if (user !== null && user.role === 'analyst') return 'Kirim ke MISP butuh izin dari admin.'
+  return 'Akun ini hanya dapat melihat; tidak dapat mengirim ke MISP.'
+}

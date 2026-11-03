@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/useAuth'
-import { canCheck } from '../lib/can'
+import { canCheck, mispDeniedText } from '../lib/can'
+import { useMisp } from '../workbench/useMisp'
 import { useWorkbench } from '../workbench/useWorkbench'
 import { DecisionRail } from './DecisionRail'
 import { EvidencePanel } from './EvidencePanel'
 import { HistoryRail } from './HistoryRail'
+import { MispPanel } from './MispPanel'
+import { MispView } from './MispView'
 import { SearchBar } from './SearchBar'
 import { TopBar, type View } from './TopBar'
 import { useHealth } from './useHealth'
 import { useCssVarHeight } from './useCssVarHeight'
 
 const PANEL = 'p-4'
-const PLACEHOLDER = 'mt-2 text-padat text-redup'
 
 // Urutan DOM sengaja mengikuti urutan visual desktop (riwayat, bukti, keputusan) supaya urutan Tab
 // sama dengan urutan baca. Di bawah 1024px panel ditumpuk bukti → keputusan → riwayat lewat CSS `order`;
@@ -21,6 +23,7 @@ export function Shell() {
   const [view, setView] = useState<View>('workbench')
   const health = useHealth(api, view)
   const [state, store] = useWorkbench(api)
+  const [misp, mispStore] = useMisp(api)
   const rootRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLElement>(null)
@@ -32,6 +35,11 @@ export function Shell() {
   useEffect(() => {
     void refreshUser()
   }, [view, refreshUser])
+
+  // Masuk ke tampilan Kiriman MISP = ambil kiriman terbaru dari pengguna lain.
+  useEffect(() => {
+    if (view === 'misp') void mispStore.refresh()
+  }, [view, mispStore])
 
   if (user === null) return null
 
@@ -91,10 +99,15 @@ export function Shell() {
               canRun={canRun}
             />
           ) : (
-            <>
-              <h1 className="text-judul font-semibold">Kiriman MISP</h1>
-              <p className={PLACEHOLDER}>Daftar kiriman belum dimuat.</p>
-            </>
+            <MispView
+              state={misp}
+              onLoadMore={() => void mispStore.loadMore()}
+              onRefresh={() => void mispStore.refresh()}
+              onOpenCheck={(id) => {
+                setView('workbench')
+                void store.select(id)
+              }}
+            />
           )}
         </main>
 
@@ -110,6 +123,18 @@ export function Shell() {
               setView('workbench')
               void store.submit(ip)
             }}
+            misp={
+              state.selected === null ? undefined : (
+                <MispPanel
+                  check={state.selected}
+                  misp={misp}
+                  deniedText={mispDeniedText(user)}
+                  onSubmit={mispStore.submit}
+                  onClearIssue={mispStore.clearIssue}
+                  onRetryLoad={() => void mispStore.loadInitial()}
+                />
+              )
+            }
           />
         </aside>
       </div>

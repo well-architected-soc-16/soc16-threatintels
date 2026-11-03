@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react'
+import type { ComponentPropsWithRef } from 'react'
 
 type Variant = 'primary' | 'secondary'
 
@@ -13,7 +13,7 @@ const VARIANTS: Record<Variant, string> = {
     'border border-garis text-teks enabled:hover:bg-panel enabled:active:bg-tanah',
 }
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ComponentPropsWithRef<'button'> {
   variant?: Variant
 }
 

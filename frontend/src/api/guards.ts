@@ -1,4 +1,4 @@
-import type { CheckOut, CheckPage } from './types'
+import type { CheckOut, CheckPage, IocOut, IocPage } from './types'
 
 // Penjaga bentuk untuk balasan 2xx. Komponen mengandalkan `sources`/`flags` berupa array dan
 // `evidence_summary` berupa objek; balasan JSON lain yang lolos (gateway, proxy, versi backend berbeda)
@@ -47,5 +47,36 @@ export function isCheckPage(value: unknown): value is CheckPage {
     Number.isFinite(value.total) &&
     Array.isArray(value.items) &&
     value.items.every(isCheckOut)
+  )
+}
+
+const IOC_STATUSES = ['pending', 'mock_sent', 'sent', 'failed']
+
+// Bentuk lengkap yang dirender tampilan MISP. Status di luar empat nilai backend ditolak di tepi:
+// status tak dikenal tidak boleh lolos dan tampil seolah sukses.
+export function isIocOut(value: unknown): value is IocOut {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'number' &&
+    typeof value.check_id === 'number' &&
+    typeof value.ip === 'string' &&
+    typeof value.reason === 'string' &&
+    isStringArray(value.tags) &&
+    typeof value.status === 'string' &&
+    IOC_STATUSES.includes(value.status) &&
+    (value.misp_event_uuid === null || typeof value.misp_event_uuid === 'string') &&
+    (value.error_message === null || typeof value.error_message === 'string') &&
+    typeof value.submitted_by === 'string' &&
+    typeof value.submitted_at === 'string'
+  )
+}
+
+export function isIocPage(value: unknown): value is IocPage {
+  return (
+    isRecord(value) &&
+    typeof value.total === 'number' &&
+    Number.isFinite(value.total) &&
+    Array.isArray(value.items) &&
+    value.items.every(isIocOut)
   )
 }
