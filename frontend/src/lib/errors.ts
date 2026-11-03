@@ -1,4 +1,5 @@
 import { isUnreachable, type ApiFailure } from '../api/client'
+import { isIocOut } from '../api/guards'
 import type {
   CheckRejected,
   IocDuplicate,
@@ -28,16 +29,6 @@ export function isIocDuplicate(body: unknown): body is IocDuplicate {
     isRecord(body) &&
     typeof body.detail === 'string' &&
     typeof body.submission_id === 'number'
-  )
-}
-
-export function isIocOut(body: unknown): body is IocOut {
-  return (
-    isRecord(body) &&
-    typeof body.id === 'number' &&
-    typeof body.check_id === 'number' &&
-    typeof body.status === 'string' &&
-    typeof body.ip === 'string'
   )
 }
 

@@ -1,6 +1,8 @@
-import type { Indication, SourceResult } from '../api/types'
+import type { Indication, IocStatus, SourceResult } from '../api/types'
 import { cacheLabel, indicationView } from '../lib/format'
-import { Chip } from './Chip'
+import { iocStatusView } from '../lib/misp'
+import { Chip, FailureChip } from './Chip'
+import { IconCheck } from './Icon'
 import { CHIP_TONE } from './tone'
 
 // Label indikasi = teks + warna, dari field `indication` backend (tidak dihitung ulang).
@@ -38,4 +40,17 @@ export function CacheBadge({
 }) {
   const label = cacheLabel(source)
   return label === null ? null : <Chip>{label}</Chip>
+}
+
+// Status kiriman MISP = teks + bentuk, tanpa hijau/kuning. `failed` memakai chip berbingkai merah + ikon X
+// (pengecualian Keputusan 10); `sent` diberi centang; `mock_sent` dan `pending` netral (Aturan tampilan 5).
+export function IocStatusChip({ status }: { status: IocStatus }) {
+  const view = iocStatusView(status)
+  if (view.tone === 'gagal') return <FailureChip>{view.label}</FailureChip>
+  return (
+    <Chip>
+      {view.confirmed && <IconCheck className="size-3.5" />}
+      {view.label}
+    </Chip>
+  )
 }

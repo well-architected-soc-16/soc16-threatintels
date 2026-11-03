@@ -1,4 +1,4 @@
-import type { CheckOut, SourceResult } from '../api/types'
+import type { CheckOut, IocOut, SourceResult } from '../api/types'
 
 // FIXTURE SINTETIS untuk uji tampilan. Bentuknya mengikuti CheckOut backend, tetapi angka gabungan
 // (risk_score, normalized_score) hanyalah contoh, BUKAN hasil perhitungan backend dan jangan dipakai sebagai
@@ -213,3 +213,19 @@ export const LEGACY_CHECK: CheckOut = makeCheck({
     }),
   ],
 })
+
+// Kiriman MISP sintetis. Hasil mock backend sungguhan ada di backend-ioc-samples.json (uji kontrak).
+export function makeIoc(over: Partial<IocOut> & Pick<IocOut, 'id'>): IocOut {
+  return {
+    check_id: over.id,
+    ip: `203.0.113.${over.id}`,
+    reason: 'alasan pengiriman yang cukup panjang',
+    tags: [],
+    status: 'mock_sent',
+    misp_event_uuid: `MOCK-00000000-0000-4000-8000-${String(over.id).padStart(12, '0')}`,
+    error_message: null,
+    submitted_by: 'analis_misp',
+    submitted_at: NOW,
+    ...over,
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "mock_sent": {
+    "id": 3,
+    "check_id": 3,
+    "ip": "118.25.6.39",
+    "reason": "Alasan contoh pengiriman ke MISP",
+    "tags": [
+      "tlp:amber",
+      "ioc"
+    ],
+    "status": "mock_sent",
+    "misp_event_uuid": "MOCK-00000000-0000-4000-8000-000000000003",
+    "error_message": null,
+    "submitted_by": "contoh",
+    "submitted_at": "2026-11-03T10:00:00+07:00"
+  },
+  "pending": {
+    "id": 4,
+    "check_id": 4,
+    "ip": "8.8.8.8",
+    "reason": "Alasan contoh pengiriman ke MISP",
+    "tags": [
+      "tlp:amber",
+      "ioc"
+    ],
+    "status": "pending",
+    "misp_event_uuid": null,
+    "error_message": null,
+    "submitted_by": "contoh",
+    "submitted_at": "2026-11-03T10:00:00+07:00"
+  },
+  "failed_501": {
+    "id": 2,
+    "check_id": 2,
+    "ip": "118.25.6.39",
+    "reason": "Alasan contoh pengiriman ke MISP",
+    "tags": [
+      "tlp:amber",
+      "ioc"
+    ],
+    "status": "failed",
+    "misp_event_uuid": null,
+    "error_message": "MISP_MODE=live belum diimplementasikan; gunakan MISP_MODE=mock",
+    "submitted_by": "contoh",
+    "submitted_at": "2026-11-03T10:00:00+07:00"
+  },
+  "failed_502": {
+    "id": 1,
+    "check_id": 1,
+    "ip": "1.2.3.4",
+    "reason": "Alasan contoh pengiriman ke MISP",
+    "tags": [
+      "tlp:amber",
+      "ioc"
+    ],
+    "status": "failed",
+    "misp_event_uuid": null,
+    "error_message": "Gagal mengirim ke MISP (ConnectionError)",
+    "submitted_by": "contoh",
+    "submitted_at": "2026-11-03T10:00:00+07:00"
+  },
+  "page": {
+    "items": [
+      {
+        "id": 3,
+        "check_id": 3,
+        "ip": "118.25.6.39",
+        "reason": "Alasan contoh pengiriman ke MISP",
+        "tags": [
+          "tlp:amber",
+          "ioc"
+        ],
+        "status": "mock_sent",
+        "misp_event_uuid": "MOCK-00000000-0000-4000-8000-000000000003",
+        "error_message": null,
+        "submitted_by": "contoh",
+        "submitted_at": "2026-11-03T10:00:00+07:00"
+      },
+      {
+        "id": 2,
+        "check_id": 2,
+        "ip": "118.25.6.39",
+        "reason": "Alasan contoh pengiriman ke MISP",
+        "tags": [
+          "tlp:amber",
+          "ioc"
+        ],
+        "status": "failed",
+        "misp_event_uuid": null,
+        "error_message": "MISP_MODE=live belum diimplementasikan; gunakan MISP_MODE=mock",
+        "submitted_by": "contoh",
+        "submitted_at": "2026-11-03T10:00:00+07:00"
+      },
+      {
+        "id": 1,
+        "check_id": 1,
+        "ip": "1.2.3.4",
+        "reason": "Alasan contoh pengiriman ke MISP",
+        "tags": [
+          "tlp:amber",
+          "ioc"
+        ],
+        "status": "failed",
+        "misp_event_uuid": null,
+        "error_message": "Gagal mengirim ke MISP (ConnectionError)",
+        "submitted_by": "contoh",
+        "submitted_at": "2026-11-03T10:00:00+07:00"
+      }
+    ],
+    "total": 3,
+    "limit": 100,
+    "offset": 0
+  },
+  "duplicate_409": {
+    "detail": "Check ini sudah pernah dikirim ke MISP",
+    "submission_id": 3
+  }
+}
