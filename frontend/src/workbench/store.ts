@@ -140,16 +140,39 @@ export function createWorkbenchStore(api: ApiClient): WorkbenchStore {
       setState({ loadingMore: false, historyError: `Riwayat gagal dimuat: ${MESSAGE_UNREADABLE}` })
       return
     }
-    const history = mergeHistory(state.history, result.data.items)
+    const incoming = result.data.items
+    const merged = mergeHistory(state.history, incoming)
+    const added = merged.length - state.history.length
     setState({
-      history,
+      history: merged,
       // Server sudah tidak punya baris lagi: jangan biarkan tombol "Muat lagi" tertinggal.
       total:
-        result.data.items.length === 0
-          ? history.length
-          : Math.max(result.data.total, history.length),
+        incoming.length === 0
+          ? merged.length
+          : Math.max(result.data.total, merged.length),
       loadingMore: false,
     })
+    // Sebagian baris sudah ada = offset bergeser karena ada check baru dari orang lain. Baris terbaru itu
+    // sendiri tidak pernah ikut termuat oleh paginasi, jadi ambil ulang halaman terdepan agar muncul di atas.
+    if (added < incoming.length) {
+      const gained = await refreshHead()
+      // Tidak ada kemajuan sama sekali: tutup tombol alih-alih membiarkannya diklik tanpa efek.
+      if (added === 0 && gained === 0) setState({ total: state.history.length })
+    }
+  }
+
+  // Menambahkan check yang lebih baru dari yang sudah dimuat ke atas riwayat. Mengembalikan jumlah baris baru.
+  // Kegagalan diam-diam diabaikan: ini penyegaran tambahan, bukan aksi yang diminta pengguna.
+  async function refreshHead(): Promise<number> {
+    const result = await listChecks(api, 0)
+    if (!result.ok || !isCheckPage(result.data)) return 0
+    const known = new Set(state.history.map((check) => check.id))
+    const newcomers = result.data.items.filter((check) => !known.has(check.id))
+    if (newcomers.length > 0) {
+      const history = [...newcomers, ...state.history]
+      setState({ history, total: Math.max(result.data.total, history.length) })
+    }
+    return newcomers.length
   }
 
   async function select(id: number) {

@@ -117,6 +117,75 @@ describe('loadInitial / loadMore', () => {
   })
 })
 
+// Server palsu dengan keadaan: daftar terbaru-dulu yang bisa bertambah di tengah paginasi.
+function statefulServer(startId: number, count: number) {
+  const list: CheckOut[] = Array.from({ length: count }, (_, i) => check(startId - i))
+  const requests: string[] = []
+  const handler = ({ url }: Call) => {
+    requests.push(url)
+    const match = /limit=(\d+)&offset=(\d+)/.exec(url)
+    if (!match) return json(404, { detail: 'tidak ada' })
+    const [limit, offset] = [Number(match[1]), Number(match[2])]
+    return json(200, page(list.slice(offset, offset + limit), list.length, offset))
+  }
+  return { list, requests, handler, addNewest: (id: number) => list.unshift(check(id)) }
+}
+
+describe('loadMore saat orang lain menambah pengecekan di tengah paginasi', () => {
+  it('baris terbaru tidak hilang dan tombol tidak macet: semua termuat, tanpa baris ganda', async () => {
+    const server = statefulServer(30, 30)
+    const { store } = setup(server.handler)
+    await store.loadInitial()
+    expect(ids(store.getState().history)).toEqual(Array.from({ length: 20 }, (_, i) => 30 - i))
+    server.addNewest(31) // dibuat orang lain setelah halaman pertama dimuat
+    await store.loadMore()
+    const state = store.getState()
+    expect(ids(state.history)).toEqual(Array.from({ length: 31 }, (_, i) => 31 - i)) // 31..1, terbaru di atas
+    expect(new Set(ids(state.history)).size).toBe(state.history.length)
+    expect(state.total).toBe(31)
+    expect(state.history.length >= (state.total ?? 0)).toBe(true) // tombol "Muat lagi" hilang
+    // halaman terdepan diambil ulang tepat sekali setelah tumpang-tindih terdeteksi
+    expect(server.requests.filter((u) => u.endsWith('offset=0'))).toHaveLength(2)
+  })
+
+  it('tanpa tumpang-tindih tidak ada permintaan tambahan', async () => {
+    const server = statefulServer(30, 30)
+    const { store } = setup(server.handler)
+    await store.loadInitial()
+    await store.loadMore()
+    expect(ids(store.getState().history)).toHaveLength(30)
+    expect(server.requests.filter((u) => u.endsWith('offset=0'))).toHaveLength(1)
+  })
+
+  it('tidak ada kemajuan sama sekali: tombol ditutup (total = jumlah dimuat), bukan diklik tanpa efek', async () => {
+    // total 50 tetapi server tidak punya baris baru: halaman berikutnya hanya mengulang baris yang sudah ada
+    const first = Array.from({ length: 20 }, (_, i) => check(20 - i))
+    const { store } = setup(({ url }) =>
+      url.endsWith('offset=0') ? json(200, page(first, 50)) : json(200, page([check(1)], 50, 20)),
+    )
+    await store.loadInitial()
+    await store.loadMore()
+    expect(store.getState().history).toHaveLength(20)
+    expect(store.getState().total).toBe(20)
+  })
+
+  it('penyegaran terdepan yang gagal diabaikan diam-diam, tanpa pesan galat', async () => {
+    const server = statefulServer(30, 30)
+    let headCalls = 0
+    const { store } = setup((call) => {
+      if (call.url.endsWith('offset=0') && ++headCalls > 1) return empty(502)
+      return server.handler(call)
+    })
+    await store.loadInitial()
+    server.addNewest(31)
+    await store.loadMore()
+    const state = store.getState()
+    expect(state.historyError).toBeNull()
+    expect(state.loadingMore).toBe(false)
+    expect(state.history.length).toBeGreaterThanOrEqual(30)
+  })
+})
+
 describe('submit', () => {
   it('berhasil: masuk paling atas, terpilih, total bertambah, POST berbadan JSON {ip}', async () => {
     const created = check(10, '1.1.1.1')

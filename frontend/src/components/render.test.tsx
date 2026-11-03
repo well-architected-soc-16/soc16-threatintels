@@ -91,11 +91,11 @@ describe('Shell', () => {
     expect(html).toContain('Keluar')
   })
 
-  it('rel menempel di bawah top bar yang tingginya diukur (--topbar-h), bukan angka keras 56px', () => {
+  it('rel menempel di bawah top bar dan berhenti di atas footer, keduanya tingginya diukur (--topbar-h, --footer-h), bukan angka keras', () => {
     const html = htmlFor(user('admin'))
     expect(html.match(/sticky top-0 z-10/g)?.length).toBe(1)
     expect(html.match(/lg:top-\[var\(--topbar-h,5rem\)\]/g)?.length).toBe(2)
-    expect(html.match(/lg:max-h-\[calc\(100vh-var\(--topbar-h,5rem\)\)\]/g)?.length).toBe(2)
+    expect(html.match(/lg:max-h-\[calc\(100vh-var\(--topbar-h,5rem\)-var\(--footer-h,2\.5rem\)\)\]/g)?.length).toBe(2)
     expect(html).not.toContain('lg:top-14')
     expect(html).not.toContain('3.5rem')
   })

@@ -8,7 +8,7 @@ import { HistoryRail } from './HistoryRail'
 import { SearchBar } from './SearchBar'
 import { TopBar, type View } from './TopBar'
 import { useHealth } from './useHealth'
-import { useTopBarHeight } from './useTopBarHeight'
+import { useCssVarHeight } from './useCssVarHeight'
 
 const PANEL = 'p-4'
 const PLACEHOLDER = 'mt-2 text-padat text-redup'
@@ -23,7 +23,9 @@ export function Shell() {
   const [state, store] = useWorkbench(api)
   const rootRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
-  useTopBarHeight(rootRef, barRef)
+  const footerRef = useRef<HTMLElement>(null)
+  useCssVarHeight(rootRef, barRef, '--topbar-h')
+  useCssVarHeight(rootRef, footerRef, '--footer-h')
 
   // Ganti tampilan = validasi ulang sesi. Token yang sudah tidak berlaku (kedaluwarsa, akun dinonaktifkan)
   // menghasilkan 401 dan otomatis mengembalikan ke login; tanpa ini shell kosong tidak pernah memanggil API.
@@ -66,7 +68,7 @@ export function Shell() {
       <div className="grid flex-1 grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)_264px] xl:grid-cols-[272px_minmax(0,1fr)_304px]">
         <aside
           aria-label="Riwayat"
-          className={`${PANEL} order-3 border-t border-garis/35 bg-panel lg:order-none lg:sticky lg:top-[var(--topbar-h,5rem)] lg:max-h-[calc(100vh-var(--topbar-h,5rem))] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-r`}
+          className={`${PANEL} order-3 border-t border-garis/35 bg-panel lg:order-none lg:sticky lg:top-[var(--topbar-h,5rem)] lg:max-h-[calc(100vh-var(--topbar-h,5rem)-var(--footer-h,2.5rem))] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-r`}
         >
           <HistoryRail
             state={state}
@@ -98,7 +100,7 @@ export function Shell() {
 
         <aside
           aria-label="Keputusan dan aksi"
-          className={`${PANEL} order-2 border-t border-garis/35 bg-panel lg:order-none lg:sticky lg:top-[var(--topbar-h,5rem)] lg:max-h-[calc(100vh-var(--topbar-h,5rem))] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-l`}
+          className={`${PANEL} order-2 border-t border-garis/35 bg-panel lg:order-none lg:sticky lg:top-[var(--topbar-h,5rem)] lg:max-h-[calc(100vh-var(--topbar-h,5rem)-var(--footer-h,2.5rem))] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-l`}
         >
           <DecisionRail
             check={state.selected}
@@ -112,7 +114,7 @@ export function Shell() {
         </aside>
       </div>
 
-      <footer className="border-t border-garis/35 bg-panel px-4 py-2 text-kecil text-redup">
+      <footer ref={footerRef} className="border-t border-garis/35 bg-panel px-4 py-2 text-kecil text-redup">
         Sumber: AbuseIPDB, VirusTotal
         {state.selected !== null && (
           <>
