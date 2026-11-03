@@ -10,7 +10,7 @@ Diperbarui: 2026-11-03 (Tahap 3). Rujukan: [`TASK-03-frontend-workbench.md`](TAS
 | 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | #31 | Selesai, ter-merge; uji LAN proxy, `:8000`, dan `/@fs` (12 dari 12 varian 403) lolos |
 | 1 | Rencana desain, API client, login, shell layout | #32 | Selesai, ter-merge. Uji manual developer lolos (3 Nov) |
 | 2 | Cek IP, bukti, riwayat | #33 | Selesai, ter-merge. Seluruh langkah "Cek selesai" 1-12 lulus (developer: 1-4 dan 9; agen di Brave headless: 5-8 dan 10-12) |
-| 3 | Kirim ke MISP, tampilan Kiriman MISP | | Selesai di branch lokal; menunggu uji manual developer (langkah a-d di bagian "Cek selesai" Tahap 3) dan "push" |
+| 3 | Kirim ke MISP, tampilan Kiriman MISP | | Selesai di branch lokal. Uji developer (a, c, d, e sebagian) dan uji peramban agen (klik ganda, konfirmasi, fokus, mode live: kirim gagal 501, kirim ulang, konfirmasi IP yang sama) lulus; menunggu jawaban dua keputusan agen dan "push" |
 | 4 | Bukti demo, uji akses negatif, polish, README | | Belum |
 
 Hasil terakhir (Tahap 3): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**376 passed**, 18 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_|window.confirm|innerHTML` di `frontend/src` kosong (exit 1).
@@ -454,11 +454,11 @@ Dilaporkan developer dengan dua screenshot; belum semua langkah dijalankan.
 | (a) kirim pertama kali | **Lulus**: check #1 (`8.8.8.8`) dan #2 (`1.1.1.1`) terkirim → "Terkirim (mock)" + `MOCK-…` + pengirim + waktu WIB + alasan + tag di rel kanan. Check #3 (sudah `mock_sent` dari 31 Okt) menampilkan status tanpa form |
 | (d) alasan < 10 karakter | **Lulus** (dilaporkan: pembatasan 10 karakter bekerja). Pesan persis, perpindahan fokus, dan "tidak ada POST di tab Network" belum dirinci |
 | (e) tampilan Kiriman MISP | **Lulus sebagian**: tabel memuat tiga kiriman (IP mono, `MOCK-…`, pengirim, alasan, tag, "Buka check #N"). Gulir horizontal di 1024px, tombol "Buka check", dan "Segarkan" belum dilaporkan |
-| (b) konfirmasi IP yang sama (live) | Alur diuji agen tanpa mode live (lihat di bawah): **lulus**; langkah dengan mode live sungguhan belum |
+| (b) konfirmasi IP yang sama (live) | Diuji agen dengan `SOURCES_MODE=live` sungguhan: **lulus** (lihat di bawah) |
 | (c) check simulasi + 422 Swagger | **Lulus** (dilaporkan: 422 sesuai yang diminta) |
 | (d) viewer dan analyst tanpa izin | **Lulus** (dilaporkan: tidak ada form MISP untuk keduanya) |
 | (f) fokus keyboard konfirmasi | Diuji agen di peramban (lihat di bawah): **lulus** |
-| (g) 501 `failed` + kirim ulang tanpa duplikat | **Sebagian**: dilaporkan "tidak ada yang terkirim, gagal". Isian form tetap setelah gagal, kirim ulang jadi `mock_sent` pada baris yang sama, dan satu baris di Kiriman MISP belum dirinci |
+| (g) 501 `failed` + kirim ulang tanpa duplikat | Dilaporkan developer: "tidak ada yang terkirim, gagal". Diuji ulang agen dengan `MISP_MODE=live` sungguhan: **lulus** (lihat di bawah) |
 | klik ganda cepat pada tombol kirim | Diuji agen di peramban: **lulus** |
 
 ### Uji peramban oleh agen (4 Nov 2026, Brave 156 headless, `http://localhost:5173`, backend sungguhan, mode mock)
@@ -478,16 +478,33 @@ Skenario belum tercakup: tombol "Buka check #N" dan "Segarkan" (dilihat tampil, 
 
 Pembersihan: 4 kiriman dan 4 check uji dihapus (sisa satu kiriman: #1 milik check #3, `admin`); akun `agen_uji` dinonaktifkan dan `can_send_misp` dikembalikan `false`. Catatan `audit_logs` oleh `agen_uji` tetap ada (permanen). Peramban uji dan berkas sementara (password acak, profil) dihapus.
 
+### Uji mode live oleh agen (4 Nov 2026, Brave headless, backend sungguhan)
+
+Izin developer: kuota boleh terpakai. Satu IP publik (`9.9.9.9`), jadi **satu panggilan VirusTotal dan satu AbuseIPDB** (keduanya HTTP 200 menurut `source_calls`); "Cek ulang" berikutnya memakai cache (badge "Cache" di rel, tanpa panggilan baru). `.env` diubah hanya pada dua baris `SOURCES_MODE` dan `MISP_MODE` (isi `.env` lain tidak dibaca) dan **dikembalikan ke `mock`** di akhir; kontainer `api` dibuat ulang dan `/health` menjawab `misp_mode: mock`. Akun sementara `agen_uji` seperti sebelumnya.
+
+| Fase | Hasil |
+|---|---|
+| `SOURCES_MODE=live`, `MISP_MODE=live`: cek `9.9.9.9` lewat kolom pencarian | COMPLETE 2/2, skor 1.8, RENDAH, **tanpa badge SIMULASI**; lencana top bar "MISP: live"; form MISP tersedia |
+| Kirim | backend 501: tepat 1 POST; chip berbingkai merah ✕ "Gagal" + `MISP_MODE=live belum diimplementasikan; gunakan MISP_MODE=mock`; tombol menjadi "Kirim ulang"; alasan dan tag **tetap terisi**; tidak ada kata "Terkirim" |
+| Ubah alasan, "Kirim ulang" (masih live) | POST ke-2, tetap Gagal, isian hasil ubahan tetap; tampilan Kiriman MISP: 1 baris berstatus Gagal + pesan |
+| `MISP_MODE=mock`, muat ulang halaman, login ulang, pilih check itu | status Gagal tampil dari server; form terisi alasan terakhir (yang diubah) dan tag dari server |
+| "Kirim ulang" | 1 POST; **baris yang sama** menjadi "Terkirim (mock)" + `MOCK-…`; Kiriman MISP tetap **1 baris** (tidak digandakan) |
+| "Cek ulang" `9.9.9.9` | check baru dari cache (live, bukan simulasi, badge Cache), form MISP baru |
+| "Kirim ke MISP" | konfirmasi inline "IP ini sudah pernah dikirim lewat check #102 (mock_sent). Kirim lagi sebagai catatan baru?", **belum ada POST** sebelum dikonfirmasi |
+| "Kirim lagi sebagai catatan baru" | 1 POST, "Terkirim (mock)"; Kiriman MISP: 2 baris untuk `9.9.9.9` |
+
+Pembersihan: 2 kiriman dan 2 check uji dihapus (sisa kiriman: #1 milik check #3); `agen_uji` dinonaktifkan (`can_send_misp` kembali `false`); peramban, password acak, dan profil dihapus. Catatan `audit_logs` dan baris `source_cache`/`source_calls` untuk `9.9.9.9` tetap ada (permanen / data live sah). Satu kesalahan prosedur: satu perintah gabungan terhenti di tengah (pola `pgrep` mengenai shell sendiri), tanpa efek pada `.env`, DB, atau peramban; langkah diulang satu per satu.
+
 ## Known gaps baru (Tahap 3)
 
 1. **Draf form hilang saat berpindah check** (state form per check, tidak disimpan; tambahan atas gap 14 rencana yang menyangkut sesi habis).
 2. **Pencocokan status memakai kiriman yang sudah dimuat** (100 terbaru + halaman tambahan yang dimuat user). 409 untuk kiriman yang lebih tua ditangani dengan keterangan netral, tanpa detail kiriman (tidak ada `GET /iocs/{id}`).
-3. **`pending` tertahan hanya teruji otomatis** (tidak bisa dibuat lewat UI); 502 dari MISP asli juga belum teruji karena klien live belum ada. Jalur 501 `failed` dan kirim ulang bisa diuji lewat UI dengan `MISP_MODE=live` (langkah g).
+3. **`pending` tertahan hanya teruji otomatis** (tidak bisa dibuat lewat UI); 502 dari MISP asli juga belum teruji karena klien live belum ada. Jalur 501 `failed` dan kirim ulang **sudah diuji lewat UI** dengan `MISP_MODE=live` (bagian di atas).
 4. **Kabel izin di `Shell` tidak teruji otomatis** (satu mutan selamat): hanya tercakup uji manual (d). Penegakan sebenarnya tetap 403 backend (bukti KM-8 di Tahap 4).
 5. **Tabel Kiriman MISP menampilkan semua baris yang dimuat tanpa penyaring** (backend tanpa filter); untuk tim 4 orang cukup.
 6. **Konfirmasi IP yang sama mengandalkan string IP persis sama** (`check.ip === item.ip`); backend sudah menormalkan IPv4, jadi cukup.
 7. **Fokus keyboard hilang setelah kirim**: tombol kirim `disabled={sending}` sehingga fokus jatuh ke `<body>` begitu pengiriman selesai (pola sama dengan gap 11 Tahap 2: "Cek ulang"). Form dikunci dengan `readOnly` saat konfirmasi, tetapi tombol kirim belum. Perbaikan nanti: `aria-disabled` atau pemulihan fokus eksplisit.
-8. ~~Komponen MISP belum pernah dijalankan di peramban~~ **sudah diuji di Chromium** (bagian di atas): klik ganda, konfirmasi, fokus. Belum: isian form setelah 501 (butuh `MISP_MODE=live`), Firefox/Safari.
+8. ~~Komponen MISP belum pernah dijalankan di peramban~~ **sudah diuji di Chromium** (bagian di atas): klik ganda, konfirmasi, fokus, isian form setelah 501, kirim ulang. Belum: Firefox/Safari.
 9. **Chip status di tabel Kiriman MISP patah dua baris** ("Terkirim" / "(mock)") pada lebar layar developer, karena kolom Status sempit; kolom "Keterangan" kosong untuk baris sukses. Polish Tahap 4: `whitespace-nowrap` pada chip di tabel.
 10. **Tabel Kiriman MISP perlu gulir horizontal di 1280px** (kolom utama sekitar 650px, tabel `min-w-[56rem]`): kolom Alasan dan Keterangan tersembunyi di sisi kanan sampai digulir, padahal Alasan penting untuk analis. Polish Tahap 4: kolom lebih ramping (UUID dipotong atau Waktu/IP digabung) atau tata letak kartu per baris.
 
