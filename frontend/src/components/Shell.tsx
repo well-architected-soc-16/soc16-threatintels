@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../auth/useAuth'
 import { canCheck } from '../lib/can'
 import { useWorkbench } from '../workbench/useWorkbench'
@@ -8,6 +8,7 @@ import { HistoryRail } from './HistoryRail'
 import { SearchBar } from './SearchBar'
 import { TopBar, type View } from './TopBar'
 import { useHealth } from './useHealth'
+import { useTopBarHeight } from './useTopBarHeight'
 
 const PANEL = 'p-4'
 const PLACEHOLDER = 'mt-2 text-padat text-redup'
@@ -20,6 +21,9 @@ export function Shell() {
   const [view, setView] = useState<View>('workbench')
   const health = useHealth(api, view)
   const [state, store] = useWorkbench(api)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
+  useTopBarHeight(rootRef, barRef)
 
   // Ganti tampilan = validasi ulang sesi. Token yang sudah tidak berlaku (kedaluwarsa, akun dinonaktifkan)
   // menghasilkan 401 dan otomatis mengembalikan ke login; tanpa ini shell kosong tidak pernah memanggil API.
@@ -33,34 +37,36 @@ export function Shell() {
   const canRun = canCheck(user)
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <TopBar
-        user={user}
-        sessionEnd={sessionEnd}
-        health={health}
-        view={view}
-        onNavigate={setView}
-        onLogout={logout}
-        search={
-          canRun ? (
-            <SearchBar
-              submitting={state.submitting}
-              error={state.submitError}
-              onSubmit={(ip) => {
-                // Hasil pengecekan tampil di tampilan Workbench.
-                setView('workbench')
-                return store.submit(ip)
-              }}
-              onEdit={store.clearSubmitError}
-            />
-          ) : null
-        }
-      />
+    <div ref={rootRef} className="flex min-h-screen flex-col">
+      <div ref={barRef} className="sticky top-0 z-10">
+        <TopBar
+          user={user}
+          sessionEnd={sessionEnd}
+          health={health}
+          view={view}
+          onNavigate={setView}
+          onLogout={logout}
+          search={
+            canRun ? (
+              <SearchBar
+                submitting={state.submitting}
+                error={state.submitError}
+                onSubmit={(ip) => {
+                  // Hasil pengecekan tampil di tampilan Workbench.
+                  setView('workbench')
+                  return store.submit(ip)
+                }}
+                onEdit={store.clearSubmitError}
+              />
+            ) : null
+          }
+        />
+      </div>
 
       <div className="grid flex-1 grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)_264px] xl:grid-cols-[272px_minmax(0,1fr)_304px]">
         <aside
           aria-label="Riwayat"
-          className={`${PANEL} order-3 border-t border-garis/35 bg-panel lg:order-none lg:sticky lg:top-14 lg:max-h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-r`}
+          className={`${PANEL} order-3 border-t border-garis/35 bg-panel lg:order-none lg:sticky lg:top-[var(--topbar-h,5rem)] lg:max-h-[calc(100vh-var(--topbar-h,5rem))] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-r`}
         >
           <HistoryRail
             state={state}
@@ -92,7 +98,7 @@ export function Shell() {
 
         <aside
           aria-label="Keputusan dan aksi"
-          className={`${PANEL} order-2 border-t border-garis/35 bg-panel lg:order-none lg:sticky lg:top-14 lg:max-h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-l`}
+          className={`${PANEL} order-2 border-t border-garis/35 bg-panel lg:order-none lg:sticky lg:top-[var(--topbar-h,5rem)] lg:max-h-[calc(100vh-var(--topbar-h,5rem))] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-l`}
         >
           <DecisionRail
             check={state.selected}

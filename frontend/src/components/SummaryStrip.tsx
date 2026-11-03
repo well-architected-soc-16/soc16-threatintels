@@ -3,12 +3,12 @@ import {
   assessmentText,
   contributes,
   formatScore,
-  formatTime,
   indicationView,
   isSimulated,
   sourceName,
 } from '../lib/format'
 import { LabelChip, SimulationTag } from './Badges'
+import { TimeText } from './TimeText'
 import { STRIP_TONE } from './tone'
 
 // Pengukur cakupan: satu sel bernama per sumber. Terisi bila menjawab; putus-putus + kode bila tidak.
@@ -83,7 +83,7 @@ export function SummaryStrip({ check }: { check: CheckOut }) {
       </div>
 
       <p className="mt-3 tabular-nums text-padat text-redup">
-        Diperiksa {formatTime(check.checked_at)} oleh {check.checked_by}
+        Diperiksa <TimeText iso={check.checked_at} /> oleh {check.checked_by}
       </p>
     </div>
   )

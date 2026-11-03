@@ -1,6 +1,7 @@
-"""Membuat ulang berkas kontrak backend-*.json dari kode backend yang SEBENARNYA.
+"""Membuat ulang berkas kontrak backend-*.json dari kode backend yang SEBENARNYA (adapter mock + assess + skema).
 
 Berjalan di dalam kontainer `api` (kode backend ada di image), TANPA database dan TANPA jaringan.
+Ini BUKAN uji end-to-end: gateway cache/kuota dan router dilewati, jadi `expires_at` null dan `from_cache` false.
 Datanya fiktif: adapter mock memakai tabel IP demo TASK-02. Tidak membaca .env atau secrets/.
 
 Pakai dari root repo (fish):

@@ -4,7 +4,6 @@ import {
   buildCopyText,
   cacheLabel,
   flagText,
-  formatTime,
   isSimulated,
   pivotLinks,
   silentSources,
@@ -13,6 +12,7 @@ import {
 import { Button } from './Button'
 import { FlagChip } from './Badges'
 import { IconCheck, IconExternal } from './Icon'
+import { TimeText } from './TimeText'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -124,7 +124,9 @@ export function DecisionRail({ check, canRun, submitting, onRerun }: DecisionRai
       </Section>
 
       <Section title="Kesegaran">
-        <p className="tabular-nums">Diperiksa {formatTime(check.checked_at)}</p>
+        <p className="tabular-nums">
+          Diperiksa <TimeText iso={check.checked_at} />
+        </p>
         <ul className="space-y-1">
           {check.sources.map((source) => {
             const label = cacheLabel(source)
@@ -134,7 +136,7 @@ export function DecisionRail({ check, canRun, submitting, onRerun }: DecisionRai
                 {label === null
                   ? 'tidak tersedia'
                   : label === 'Cache'
-                    ? `Cache, berlaku sampai ${formatTime(source.expires_at)}`
+                    ? <>Cache, berlaku sampai <TimeText iso={source.expires_at} /></>
                     : 'Ambil baru'}
               </li>
             )

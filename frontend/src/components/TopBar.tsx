@@ -43,7 +43,7 @@ export function TopBar({
   search = null,
 }: TopBarProps) {
   return (
-    <header className="sticky top-0 z-10 flex min-h-14 flex-wrap items-center gap-x-6 gap-y-2 border-b border-garis/35 bg-panel px-4 py-2">
+    <header className="flex min-h-14 flex-wrap items-center gap-x-6 gap-y-2 border-b border-garis/35 bg-panel px-4 py-2">
       <span className="text-sub font-semibold">SOC16 TI</span>
 
       {search}

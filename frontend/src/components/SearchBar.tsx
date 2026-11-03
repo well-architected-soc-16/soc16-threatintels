@@ -11,7 +11,7 @@ interface SearchBarProps {
 }
 
 const FIELD =
-  'w-full rounded-md border border-garis bg-tanah px-3 py-2 font-mono text-isi text-teks placeholder:font-sans placeholder:text-redup disabled:opacity-60'
+  'w-full rounded-md border border-garis bg-tanah px-3 py-2 font-mono text-isi text-teks placeholder:font-sans placeholder:text-redup read-only:opacity-60'
 
 // Validasi di browser hanya untuk "kosong"; validasi IP sebenarnya oleh backend (Tahap 2 butir 1).
 export function SearchBar({ submitting, error, onSubmit, onEdit }: SearchBarProps) {
@@ -44,7 +44,9 @@ export function SearchBar({ submitting, error, onSubmit, onEdit }: SearchBarProp
           spellCheck={false}
           autoFocus
           value={value}
-          disabled={submitting}
+          // readOnly (bukan disabled) agar fokus keyboard tidak jatuh ke <body> saat pengecekan selesai.
+          readOnly={submitting}
+          aria-busy={submitting}
           aria-describedby="ip-search-status"
           placeholder="IPv4 publik, mis. 118.25.6.39"
           onChange={(event) => {

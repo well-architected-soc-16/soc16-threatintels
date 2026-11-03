@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { CheckOut } from '../api/types'
-import { formatScore, formatTime, isSimulated } from '../lib/format'
+import { formatScore, isSimulated } from '../lib/format'
 import { filterHistory, hasMore } from '../lib/history'
 import type { WorkbenchState } from '../workbench/store'
 import { LabelChip, SimulationTag } from './Badges'
 import { Button } from './Button'
 import { IconX } from './Icon'
+import { TimeText } from './TimeText'
 
 interface HistoryRailProps {
   state: Pick<
@@ -46,7 +47,7 @@ function HistoryRow({
           <LabelChip indication={check.indication} />
         </span>
         <span className="mt-1 block tabular-nums text-kecil text-redup">
-          {formatTime(check.checked_at)}
+          <TimeText iso={check.checked_at} />
         </span>
         {isSimulated(check) && (
           <span className="mt-1 block">

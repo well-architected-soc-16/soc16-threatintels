@@ -177,7 +177,7 @@ Dua netral slate, satu aksen biru, dan satu set warna semantik yang diwajibkan o
 
 Tiga panel pada ≥ 1024px: rel kiri (riwayat), tengah (bukti, fluid), rel kanan (keputusan, sticky di bawah top bar 56px). Lebar rel 272/304px pada ≥ 1280px dan 232/264px pada 1024–1279px. Di bawah 1024px panel ditumpuk bukti → keputusan → riwayat lewat CSS `order`. Urutan DOM mengikuti urutan visual desktop agar urutan Tab sama dengan urutan baca; di layar sempit Tab lebih dulu melewati riwayat (diterima, layar sempit = sentuh). Satuan spasi 4px; padding panel 16px.
 
-Top bar `sticky`, membungkus ke baris kedua bila sempit. Halaman login: satu kartu 384px di tengah, bukan hero.
+Top bar `sticky` (pembungkusnya yang menempel), membungkus ke baris kedua bila sempit. Rel kiri/kanan menempel tepat di bawahnya memakai tinggi top bar yang **diukur** (`ResizeObserver` menulis `--topbar-h`; cadangan 5rem), bukan angka keras, karena tingginya berubah oleh kolom pencarian, pesan galat, dan pembungkusan baris. Halaman login: satu kartu 384px di tengah, bukan hero.
 
 ## Elevation & Depth
 

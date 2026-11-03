@@ -9,6 +9,7 @@ import { HistoryRail } from './HistoryRail'
 import { SearchBar } from './SearchBar'
 import { AbuseTab, RawJsonTab, SummaryTab, VirusTotalTab } from './SourceTabs'
 import { SummaryStrip } from './SummaryStrip'
+import { TimeText } from './TimeText'
 
 // Render markup (tanpa peramban) untuk mengunci invarian Aturan tampilan pada fixture SINTETIS.
 // Yang diuji adalah tampilan, bukan rumus skor backend.
@@ -377,7 +378,7 @@ describe('DecisionRail: RBAC tampilan dan aksi', () => {
       ip: '1.1.1.1',
       sources: [makeSource({ source: 'abuseipdb', status: 'OK_SIGNAL', from_cache: true, flags: [] })],
     })
-    expect(rail(cached, true)).toContain('Cache, berlaku sampai 03 Nov 2026 16:00:00 WIB')
+    expect(rail(cached, true)).toMatch(/Cache, berlaku sampai <time[^>]*>03 Nov 2026 16:00:00 WIB<\/time>/)
     expect(rail(demo('1.1.1.1'), true)).toContain('Ambil baru')
     expect(rail(LEGACY_CHECK, true)).not.toContain('Ambil baru')
   })
@@ -410,9 +411,11 @@ describe('SearchBar', () => {
     expect(out).toContain('>Cek IP<')
   })
 
-  it('memeriksa: tombol "Memeriksa…" nonaktif dan teks bisa sampai belasan detik', () => {
+  it('memeriksa: tombol "Memeriksa…" nonaktif, kolom hanya-baca (fokus tidak hilang), dan teks belasan detik', () => {
     const out = bar({ submitting: true })
     expect(out).toMatch(/<button[^>]*disabled[^>]*>Memeriksa…/)
+    expect(out).toMatch(/<input[^>]*readOnly/)
+    expect(out).not.toMatch(/<input[^>]*disabled/)
     expect(out).toContain('bisa sampai belasan detik')
   })
 
@@ -471,5 +474,82 @@ describe('EvidencePanel', () => {
     const out = panel({ detailError: 'Pemeriksaan tidak ditemukan.' })
     expect(out).toContain('role="alert"')
     expect(out).toContain('Pemeriksaan tidak ditemukan.')
+  })
+})
+
+describe('TimeText (Keputusan 20: ISO asli sebagai tooltip, hanya bila dikonversi)', () => {
+  it('+07:00: teks WIB, <time dateTime> dan title berisi ISO aslinya', () => {
+    expect(html(<TimeText iso="2026-11-02T14:03:07+07:00" />)).toBe(
+      '<time dateTime="2026-11-02T14:03:07+07:00" title="2026-11-02T14:03:07+07:00">02 Nov 2026 14:03:07 WIB</time>',
+    )
+  })
+
+  it('+00:00, string asing, dan null: tanpa <time>, tanpa label WIB, tanpa tooltip', () => {
+    const utc = html(<TimeText iso="2026-11-02T07:03:07+00:00" />)
+    expect(utc).toBe('2026-11-02T07:03:07+00:00')
+    expect(utc).not.toContain('WIB')
+    expect(html(<TimeText iso="kemarin" />)).toBe('kemarin')
+    expect(html(<TimeText iso={null} />)).toBe('tidak tersedia')
+    expect(html(<TimeText iso="kemarin" />)).not.toContain('<time')
+  })
+
+  it('riwayat dan strip memakai <time> dengan tooltip ISO', () => {
+    const check = demo('1.1.1.1')
+    expect(html(<SummaryStrip check={check} />)).toContain('title="2026-11-03T10:00:00+07:00"')
+    const rail = html(
+      <HistoryRail
+        state={baseState({ history: [check], total: 1, historyStatus: 'ready' })}
+        onSelect={noop}
+        onLoadMore={noop}
+        onRetry={noop}
+      />,
+    )
+    expect(rail).toContain('<time dateTime="2026-11-03T10:00:00+07:00"')
+  })
+})
+
+describe('label waktu sumber menurut source_time_type (Aturan tampilan 3)', () => {
+  const abuse = (over: Partial<Parameters<typeof makeSource>[0]>) =>
+    html(<AbuseTab source={makeSource({ source: 'abuseipdb', status: 'OK_SIGNAL', evidence_summary: { totalReports: 1 }, ...over })} />)
+  const vt = (over: Partial<Parameters<typeof makeSource>[0]>) =>
+    html(<VirusTotalTab source={makeSource({ source: 'virustotal', status: 'OK_SIGNAL', evidence_summary: { malicious: 1 }, ...over })} />)
+
+  it('last_report = "Laporan terakhir", last_analysis = "Analisis terakhir"', () => {
+    expect(abuse({ source_time_type: 'last_report', source_time: '2026-11-02T14:00:00+07:00' })).toContain('Laporan terakhir')
+    expect(vt({ source_time_type: 'last_analysis', source_time: '2026-11-02T14:00:00+07:00' })).toContain('Analisis terakhir')
+  })
+
+  it('jenis ada tetapi waktu null: tetap berlabel, nilai "tidak tersedia"', () => {
+    const out = abuse({ source_time_type: 'last_report', source_time: null })
+    expect(out).toContain('Laporan terakhir')
+    expect(out).toContain('tidak tersedia')
+  })
+
+  it('jenis null: label netral "Waktu dari sumber", bukan label karangan', () => {
+    const out = vt({ source_time_type: null, source_time: null })
+    expect(out).toContain('Waktu dari sumber')
+    expect(out).not.toContain('Analisis terakhir')
+    expect(out).not.toContain('Laporan terakhir')
+  })
+})
+
+describe('ARIA tab: tidak ada rujukan yang menggantung', () => {
+  const refs = (markup: string, attr: string) =>
+    [...markup.matchAll(new RegExp(`${attr}="([^"]+)"`, 'g'))].map((match) => match[1])
+
+  it('aria-controls hanya pada tab terpilih dan menunjuk id panel yang ada', () => {
+    const out = html(
+      <EvidencePanel selected={demo('1.1.1.1')} detailLoading={false} detailError={null} submitting={false} canRun />,
+    )
+    const controls = refs(out, 'aria-controls')
+    expect(controls).toHaveLength(1)
+    for (const id of controls) expect(out).toContain(`id="${id}"`)
+  })
+
+  it('aria-labelledby panel menunjuk id tab yang ada', () => {
+    const out = html(
+      <EvidencePanel selected={demo('1.1.1.1')} detailLoading={false} detailError={null} submitting={false} canRun />,
+    )
+    for (const id of refs(out, 'aria-labelledby')) expect(out).toContain(`id="${id}"`)
   })
 })

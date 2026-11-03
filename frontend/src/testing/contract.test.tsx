@@ -12,9 +12,11 @@ import { createWorkbenchStore } from '../workbench/store'
 import mockSamples from './backend-mock-samples.json'
 import rejectedSamples from './backend-rejected-samples.json'
 
-// UJI KONTRAK: berkas JSON di sini adalah keluaran ASLI kode backend (adapter mock + assess + skema CheckOut /
-// CheckRejected), dihasilkan di kontainer `api` tanpa database dan tanpa jaringan. Data fiktif (mode mock).
-// Cara membuat ulang ada di docs/tasks/TASK-03-progress.md. Bila skema backend berubah, uji ini yang pertama gagal.
+// UJI KONTRAK: berkas JSON di sini dihasilkan oleh kode backend sungguhan di kontainer `api`: adapter mock +
+// `assess` + skema respons (CheckOut / CheckRejected). BUKAN uji end-to-end: tidak melewati gateway cache/kuota,
+// router, maupun database, sehingga `expires_at` null dan `from_cache` false di sampel (respons POST /checks nyata
+// mengisinya dari gateway). Data fiktif (mode mock). Pembuatan ulang: src/testing/gen_backend_samples.py.
+// Bila skema backend berubah, uji ini yang pertama gagal.
 
 const samples = mockSamples as unknown as CheckOut[]
 const bySample = (ip: string) => {
@@ -26,7 +28,7 @@ const html = (node: React.ReactNode) => renderToStaticMarkup(node)
 const noop = () => {}
 const scoreOf = (markup: string) => /Skor gabungan: <\/span>([^<]*)</.exec(markup)?.[1] ?? null
 
-describe('kontrak: CheckOut asli backend', () => {
+describe('kontrak: CheckOut dari skema backend sungguhan', () => {
   it('ketujuh IP demo diterima penjaga bentuk', () => {
     expect(samples).toHaveLength(7)
     for (const sample of samples) expect(isCheckOut(sample)).toBe(true)
@@ -134,7 +136,7 @@ describe('kontrak: hasil yang diminta "Cek selesai" Tahap 2 (tabel IP demo TASK-
   })
 })
 
-describe('kontrak: input ditolak (badan 422 asli backend)', () => {
+describe('kontrak: input ditolak (badan 422 dari skema backend sungguhan)', () => {
   const inputs = Object.entries(rejectedSamples)
 
   it('keempat input di "Cek selesai" ada', () => {

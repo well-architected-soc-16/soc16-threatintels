@@ -10,15 +10,16 @@ import {
   formatDuration,
   formatHttpStatus,
   formatNormalizedScore,
-  formatTime,
   cacheLabel,
   sourceName,
+  sourceTimeLabel,
   vendorRatio,
   whitelistText,
   SIMULATION_FLAG,
 } from '../lib/format'
 import { CacheBadge, FlagChip } from './Badges'
 import { FailureChip } from './Chip'
+import { TimeText } from './TimeText'
 
 // Semua nilai dari sumber (pihak ketiga) dirender sebagai teks React biasa; tidak ada HTML mentah (Aturan 7).
 
@@ -53,9 +54,13 @@ function StatusLine({ source }: { source: SourceResult }) {
 function Meta({ source }: { source: SourceResult }) {
   return (
     <dl className="mt-3 border-t border-garis/35 pt-2">
-      <Field label="Diambil">{formatTime(source.retrieved_at)}</Field>
+      <Field label="Diambil">
+        <TimeText iso={source.retrieved_at} />
+      </Field>
       <Field label="Asal data">{cacheLabel(source) ?? 'tidak tersedia'}</Field>
-      <Field label="Berlaku sampai">{formatTime(source.expires_at)}</Field>
+      <Field label="Berlaku sampai">
+        <TimeText iso={source.expires_at} />
+      </Field>
       <Field label="HTTP status">{formatHttpStatus(source.http_status)}</Field>
       <Field label="Durasi">{formatDuration(source.duration_ms)}</Field>
     </dl>
@@ -74,6 +79,20 @@ function SourceFlags({ source }: { source: SourceResult }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+// Label menurut source_time_type (Aturan tampilan 3): laporan terakhir / analisis terakhir; tanpa jenis = netral.
+function SourceTimeField({ source }: { source: SourceResult }) {
+  const typeLabel = sourceTimeLabel(source.source_time_type)
+  const label =
+    typeLabel === 'tidak tersedia'
+      ? 'Waktu dari sumber'
+      : typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)
+  return (
+    <Field label={label}>
+      {source.source_time === null ? 'tidak tersedia' : <TimeText iso={source.source_time} />}
+    </Field>
   )
 }
 
@@ -142,7 +161,7 @@ export function AbuseTab({ source }: { source: SourceResult | undefined }) {
             <span className="tabular-nums">{formatCount(users)}</span>
           </Field>
           {/* Dari source_time (WIB, dari backend), bukan evidence.lastReportedAt yang UTC mentah. */}
-          <Field label="Laporan terakhir">{formatTime(source.source_time)}</Field>
+          <SourceTimeField source={source} />
           <Field label={KEY('isWhitelisted')}>{whitelistText(whitelisted)}</Field>
         </dl>
       ) : (
@@ -174,7 +193,7 @@ export function VirusTotalTab({ source }: { source: SourceResult | undefined }) 
           ))}
           <Field label="Vendor menandai">{describeVendorRatio(vendorRatio(ev))}</Field>
           {/* Mock tidak punya last_analysis_date; null tampil "tidak tersedia". */}
-          <Field label="Analisis terakhir">{formatTime(source.source_time)}</Field>
+          <SourceTimeField source={source} />
         </dl>
       ) : (
         <p className="mt-3 text-padat text-redup">Tidak ada bukti dari sumber ini.</p>

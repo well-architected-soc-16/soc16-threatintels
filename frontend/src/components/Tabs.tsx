@@ -55,7 +55,8 @@ export function Tabs({ tabs, active, onChange, prefix, label }: TabsProps) {
             type="button"
             role="tab"
             aria-selected={selected}
-            aria-controls={panelId(prefix, tab.id)}
+            // Hanya panel aktif yang dirender; aria-controls pada tab lain akan menunjuk id yang tidak ada.
+            aria-controls={selected ? panelId(prefix, tab.id) : undefined}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
