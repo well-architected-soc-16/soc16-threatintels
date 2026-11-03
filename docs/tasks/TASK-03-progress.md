@@ -445,6 +445,22 @@ f. **Keyboard**: pada konfirmasi inline, fokus pindah ke panel lalu Tab ke "Kiri
 g. **Jalur gagal dan kirim ulang tanpa duplikat (tanpa kuota).** Pakai check #1 atau #2 yang belum dikirim (yang tidak dipakai di langkah a). Setel `MISP_MODE=live` di `.env` dan buat ulang kontainer `api` (lencana top bar menjadi "MISP: live"). Kirim → backend menjawab 501: chip berbingkai merah ✕ "Gagal" + `error_message`, tombol berubah "Kirim ulang", isian form **tetap ada**. Ubah isian lalu kirim lagi → tetap gagal, isian tetap. Kembalikan `MISP_MODE=mock`, buat ulang kontainer, tekan "Kirim ulang" → 200, "Terkirim (mock)" pada **baris yang sama**; tampilan Kiriman MISP hanya punya satu baris untuk check itu. Ini bukti aturan CLAUDE.md "retry tidak menggandakan data" secara end-to-end.
 h. **Yang hanya teruji otomatis**: `pending` (kiriman tertahan; tidak bisa dibuat lewat UI) dan 502 dari MISP asli.
 
+### Hasil uji manual developer (4 Nov 2026, Chromium, mode mock, login `analyst_misp`)
+
+Dilaporkan developer dengan dua screenshot; belum semua langkah dijalankan.
+
+| Langkah | Hasil |
+|---|---|
+| (a) kirim pertama kali | **Lulus**: check #1 (`8.8.8.8`) dan #2 (`1.1.1.1`) terkirim → "Terkirim (mock)" + `MOCK-…` + pengirim + waktu WIB + alasan + tag di rel kanan. Check #3 (sudah `mock_sent` dari 31 Okt) menampilkan status tanpa form |
+| (d) alasan < 10 karakter | **Lulus** (dilaporkan: pembatasan 10 karakter bekerja). Pesan persis, perpindahan fokus, dan "tidak ada POST di tab Network" belum dirinci |
+| (e) tampilan Kiriman MISP | **Lulus sebagian**: tabel memuat tiga kiriman (IP mono, `MOCK-…`, pengirim, alasan, tag, "Buka check #N"). Gulir horizontal di 1024px, tombol "Buka check", dan "Segarkan" belum dilaporkan |
+| (b) konfirmasi IP yang sama (live) | Belum |
+| (c) check simulasi + 422 Swagger | Belum |
+| (d) viewer dan analyst tanpa izin | Belum |
+| (f) fokus keyboard konfirmasi | Belum |
+| (g) 501 `failed` + kirim ulang tanpa duplikat | Belum |
+| klik ganda cepat pada tombol kirim | Belum |
+
 ## Known gaps baru (Tahap 3)
 
 1. **Draf form hilang saat berpindah check** (state form per check, tidak disimpan; tambahan atas gap 14 rencana yang menyangkut sesi habis).
@@ -455,6 +471,7 @@ h. **Yang hanya teruji otomatis**: `pending` (kiriman tertahan; tidak bisa dibua
 6. **Konfirmasi IP yang sama mengandalkan string IP persis sama** (`check.ip === item.ip`); backend sudah menormalkan IPv4, jadi cukup.
 7. **Fokus keyboard hilang setelah kirim**: tombol kirim `disabled={sending}` sehingga fokus jatuh ke `<body>` begitu pengiriman selesai (pola sama dengan gap 11 Tahap 2: "Cek ulang"). Form dikunci dengan `readOnly` saat konfirmasi, tetapi tombol kirim belum. Perbaikan nanti: `aria-disabled` atau pemulihan fokus eksplisit.
 8. **Komponen MISP belum pernah dijalankan di peramban** oleh agen (hanya render statis, store, dan kontrak). Pada Tahap 2 uji peramban menemukan dua bug yang lolos uji unit; ulangi untuk Tahap 3 (perpindahan fokus, isian form setelah 501, alur konfirmasi, tata letak form di rel 232px).
+9. **Chip status di tabel Kiriman MISP patah dua baris** ("Terkirim" / "(mock)") pada lebar layar developer, karena kolom Status sempit; kolom "Keterangan" kosong untuk baris sukses. Polish Tahap 4: `whitespace-nowrap` pada chip di tabel.
 
 ### Keputusan agen yang meminta persetujuan developer
 
