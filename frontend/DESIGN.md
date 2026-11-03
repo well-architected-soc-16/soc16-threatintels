@@ -142,7 +142,7 @@ Dua netral slate, satu aksen biru, dan satu set warna semantik yang diwajibkan o
 ### Named Rules
 **The One Blue Rule.** Biru Aksen hanya untuk elemen yang bisa diklik atau sedang difokus. Tidak pernah dipakai untuk status, dekorasi, atau label.
 
-**The No Green Rule.** Tidak ada hijau di mana pun. Hijau dibaca "aman", dan tool ini tidak boleh menyatakan sebuah IP aman. Keberhasilan (mis. "Terkirim (mock)") memakai chip netral berbatas Garis.
+**The No Green Rule.** Tidak ada hijau di mana pun. Hijau dibaca "aman", dan tool ini tidak boleh menyatakan sebuah IP aman. Keberhasilan (mis. "Terkirim (mock)") memakai chip netral berbatas Garis. Ukurannya konkret: tidak ada token warna dengan hue 75–170° dan saturasi ≥ 15% (dijaga `frontend/design.test.ts`). `RENDAH` tidak melanggar aturan ini: ia abu-slate (teks #d3dce6, latar #2a3644; hue 212°, saturasi 24–28%), sekeluarga dengan Tanah, Panel, dan Garis. Label "rendah" berarti indikasinya rendah, bukan IP-nya aman, jadi ia tidak boleh dibuat lebih hijau, lebih terang, atau lebih "menenangkan" dari netral lain.
 
 **The Verdict-Only Rule.** Kuning, oranye, dan merah label verdict tidak boleh dipakai untuk hal lain. Simulasi dan `pending` sengaja tidak memakai kuning.
 

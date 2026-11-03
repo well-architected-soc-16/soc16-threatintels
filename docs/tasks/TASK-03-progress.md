@@ -1,6 +1,6 @@
 # TASK-03 — Progress
 
-Diperbarui: 2026-11-02. Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-frontend-workbench.md), issue #28.
+Diperbarui: 2026-11-03. Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-frontend-workbench.md), issue #28.
 
 ## Status per tahap
 
@@ -8,12 +8,12 @@ Diperbarui: 2026-11-02. Rujukan: [`TASK-03-frontend-workbench.md`](TASK-03-front
 |---|---|---|---|
 | Rencana | Rencana TASK-03, keputusan grilling (Keputusan 13-28), `PRODUCT.md` | #30 | Selesai, ter-merge |
 | 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | #31 | Selesai, ter-merge; uji LAN proxy, `:8000`, dan `/@fs` (12 dari 12 varian 403) lolos |
-| 1 | Rencana desain, API client, login, shell layout | | Rencana desain disetujui (2 Nov); login, API client, dan shell selesai di branch lokal; **menunggu uji manual developer** (login 3 role, paksa 401) dan "push" |
+| 1 | Rencana desain, API client, login, shell layout | PR ini | Selesai, menunggu merge. Uji manual developer lolos (3 Nov), kode dan test hijau |
 | 2 | Cek IP, bukti, riwayat | | Belum |
 | 3 | Kirim ke MISP, tampilan Kiriman MISP | | Belum |
 | 4 | Bukti demo, uji akses negatif, polish, README | | Belum |
 
-Hasil terakhir (Tahap 1): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**87 passed**, 8 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_` di `frontend/src` kosong.
+Hasil terakhir (Tahap 1): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**92 passed**, 9 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_` di `frontend/src` kosong.
 
 ## Tahap 0
 
@@ -249,11 +249,21 @@ Dikerjakan di branch `feat/task-03-tahap-1-api-client-login-shell`. Tidak ada pe
 
 ### Bukti uji otomatis
 
-- 87 test Vitest: klien API (header Bearer, `auth:false`, form-urlencoded, 401 normal/basi/setelah logout, jaringan, bukan-JSON, 503 membawa badan, `abortAll`, predikat `isUnreachable`), parser galat (tiga bentuk 422, 404/409/501/502, tanpa salin `input`), `session` (base64url panjang mod 4 berbeda, karakter `-`/`_`, UTF-8, `exp` rusak, jam WIB), `can` (viewer tanpa cek dan MISP; analyst tanpa `can_send_misp` tanpa MISP), `health`, alur login (`performLogin`), dan render markup `LoginPage`/`Shell` lewat `react-dom/server` (`method="post"`, atribut `autocomplete`, tanpa tautan eksternal, urutan panel, jam sesi, tanpa `%`).
-- **Uji mutasi** (merusak kode sengaja, memastikan test gagal, lalu memulihkan): dekode base64url, penjaga 401 basi, penyalinan `input`, `method="post"`, urutan panel `order-*`, token tidak dibuang saat `/auth/me` gagal, `/auth/me` ikut logout global, serta predikat `isUnreachable` (dilonggarkan dan dihapus syarat badan kosongnya) semuanya **tertangkap**. Dua temuan: (a) pengecualian login awalnya **lolos** karena test memakai `auth:false`, sehingga penjaga lain yang menahannya; test yang tepat sasaran ditambahkan dan kini menangkapnya. (b) Satu mutasi (membalik flag pada `POST /auth/login`) tidak menggagalkan test karena ekuivalen: request itu tanpa token, jadi flag tidak berpengaruh.
+- 92 test Vitest: klien API (header Bearer, `auth:false`, form-urlencoded, 401 normal/basi/setelah logout, jaringan, bukan-JSON, 503 membawa badan, `abortAll`, predikat `isUnreachable`), parser galat (tiga bentuk 422, 404/409/501/502, tanpa salin `input`), `session` (base64url panjang mod 4 berbeda, karakter `-`/`_`, UTF-8, `exp` rusak, jam WIB), `can` (viewer tanpa cek dan MISP; analyst tanpa `can_send_misp` tanpa MISP), `health`, alur login (`performLogin`), render markup `LoginPage`/`Shell` lewat `react-dom/server`, serta penjaga palet (`design.test.ts`: tidak ada warna hue 75–170°, `RENDAH` abu-slate, simulasi ≥ 40° dari aksen) (`method="post"`, atribut `autocomplete`, tanpa tautan eksternal, urutan panel, jam sesi, tanpa `%`).
+- **Uji mutasi** (merusak kode sengaja, memastikan test gagal, lalu memulihkan): dekode base64url, penjaga 401 basi, penyalinan `input`, `method="post"`, urutan panel `order-*`, token tidak dibuang saat `/auth/me` gagal, `/auth/me` ikut logout global, predikat `isUnreachable` (dilonggarkan dan dihapus syarat badan kosongnya), serta penjaga palet (RENDAH dikehijauan, token hijau baru, warna format `oklch` yang tak terbaca parser, ungu digeser dekat biru) semuanya **tertangkap**. Dua temuan: (a) pengecualian login awalnya **lolos** karena test memakai `auth:false`, sehingga penjaga lain yang menahannya; test yang tepat sasaran ditambahkan dan kini menangkapnya. (b) Satu mutasi (membalik flag pada `POST /auth/login`) tidak menggagalkan test karena ekuivalen: request itu tanpa token, jadi flag tidak berpengaruh.
 - Smoke dev server (`npm run dev`, localhost): semua modul (`main.tsx`, `App.tsx`, `AuthProvider.tsx`, `Shell.tsx`, `LoginPage.tsx`, `TopBar.tsx`, `index.css`) ter-compile (HTTP 200), log bebas error/warn, proxy `/api/v1/health` 200, `/api/v1/auth/me` tanpa token 401. Detektor Impeccable (`detect --json src index.html`) tanpa temuan. Dev server dihentikan.
 
-### "Cek selesai" Tahap 1 — langkah developer (belum dijalankan)
+**Pelajaran pengujian:** versi pertama `design.test.ts` membaca CSS lewat `import … ?raw`, tetapi Vitest mengosongkan isi file CSS yang diimpor, sehingga test gagal pada file yang belum diubah dan hasil mutasinya tidak bermakna. Ditemukan karena baseline dijalankan lebih dulu; test dipindah ke akar `frontend/` dan membaca dengan `node:fs`. Uji mutasi hanya sah bila baseline lulus.
+
+### "Cek selesai" Tahap 1 — hasil uji manual developer (3 Nov 2026)
+
+Dilaporkan developer (bukan diamati agen). Lolos: login 3 role (admin, analyst, viewer); password salah; paksa 401 (pesan "Sesi berakhir, login lagi"); F5 kembali ke login; API dihentikan menampilkan "API tidak terjangkau"; storage peramban kosong; tidak ada request keluar origin. Satu temuan yang dijelaskan developer: `?token=` yang terlihat di tab Network adalah WebSocket `vite-hmr` (hot reload dev server), bukan token login. Screenshot 1280×720, 1024×768, dan 800×390 sudah dibuat developer (disimpan di luar repo).
+
+Catatan polish dari developer: **panel samping tidak setinggi area utama di desktop** (dicatat sebagai known gap 7). Penyebab yang terbaca dari kode: kedua `aside` memakai `lg:self-start` dan `lg:sticky` dengan `max-h`, sehingga tingginya mengikuti isi, bukan tinggi baris grid, dan warna latar Panel berhenti di bawah isi.
+
+Jawaban developer atas pertanyaan agen: (1) pesan yang terpotong memang "bila perlu", tidak ada lanjutan; (2) nama di `DESIGN.md` (North Star, nama warna, aturan bernama) **tetap**, dengan syarat aturan No Green tidak bentrok dengan `RENDAH` (diverifikasi: tidak ada warna di rentang hijau; `RENDAH` hue 212°, saturasi 24–28%; ditambah penjaga otomatis dan kalimat penegas di `DESIGN.md`); (3) Impeccable sebagai skill mandiri, versi 4.8.0.
+
+### Langkah uji manual Tahap 1 (sudah dijalankan developer; disimpan sebagai prosedur ulang)
 
 Agen tidak memegang password akun seed, jadi login nyata dan paksa-401 belum diuji di peramban. Jalankan sendiri:
 
@@ -269,9 +279,10 @@ Agen tidak memegang password akun seed, jadi login nyata dan paksa-401 belum diu
 
 ## Known gaps baru (Tahap 1)
 
-1. **Uji manual login nyata, paksa-401, dan screenshot belum dilakukan** (butuh akun seed dan peramban); daftar langkah di atas.
+1. ~~Uji manual login nyata, paksa-401, dan screenshot~~ **sudah dilakukan developer** (lihat hasil di atas). Tersisa: bukti screenshot belum diperiksa agen untuk kritik desain (Keputusan 13h) — dikirim bila diminta.
 2. **Tidak ada uji peramban otomatis** (Playwright dilarang, Keputusan 13h; testing-library tidak dipakai, Keputusan 6). Perilaku klik dan submit di peramban sungguhan hanya tercakup oleh logika murni (`performLogin`, klien API) dan render markup, bukan oleh interaksi nyata.
 3. **Deteksi sesi berakhir tidak proaktif**: baru terjadi saat ganti tampilan atau aksi terautentikasi. Jam "sesi berakhir" berasal dari `exp`, sedangkan penegakannya tetap 401 dari backend.
 4. **Tab order di layar < 1024px** lebih dulu melewati riwayat (keputusan 10).
-5. **Kalimat deskriptif `DESIGN.md` belum dikonfirmasi developer** (keputusan 1).
+5. ~~Kalimat deskriptif `DESIGN.md` belum dikonfirmasi~~ **dikonfirmasi developer: tetap** (3 Nov).
 6. **Sidecar `.impeccable/design.json` tidak ada**; live mode Impeccable tidak dikonfigurasi. Bila nanti dibutuhkan, periksa isinya (tanpa path pribadi) sebelum di-commit.
+7. **Panel samping tidak setinggi area utama di desktop** (polish, dijadwalkan di Tahap 4). Perbaikan kemungkinan: `lg:self-stretch` dengan isi yang sticky di dalamnya, atau latar Panel pada kolom grid.
