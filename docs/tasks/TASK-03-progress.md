@@ -13,7 +13,7 @@ Diperbarui: 2026-11-03 (Tahap 2). Rujukan: [`TASK-03-frontend-workbench.md`](TAS
 | 3 | Kirim ke MISP, tampilan Kiriman MISP | | Belum |
 | 4 | Bukti demo, uji akses negatif, polish, README | | Belum |
 
-Hasil terakhir (Tahap 2): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**253 passed**, 15 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_` di `frontend/src` kosong.
+Hasil terakhir (Tahap 2): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**263 passed**, 15 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_` di `frontend/src` kosong.
 
 ## Tahap 0
 
@@ -311,16 +311,21 @@ Dikerjakan di branch `feat/task-03-tahap-2-workbench-cek-bukti-riwayat`. Tidak a
 11. **Pencarian dan klik riwayat memindahkan ke tampilan Workbench** bila sedang di Kiriman MISP, supaya hasil terlihat.
 12. **Kotak pencarian dikosongkan setelah berhasil**, dipertahankan bila gagal (agar mudah dikoreksi). Viewer tidak mendapat kotak pencarian maupun tombol Cek ulang (hanya tampilan; kontrol sebenarnya 403 di backend).
 13. **`useSyncExternalStore` wajib punya `getServerSnapshot`** untuk render server; ditemukan karena test render Shell gagal. Diperbaiki di `useWorkbench`.
-14. **Uji kontrak dengan keluaran ASLI backend.** `src/testing/backend-mock-samples.json` dan `backend-rejected-samples.json` dihasilkan dari kode backend sungguhan (adapter mock + `assess` + skema respons) di kontainer `api`, tanpa database dan tanpa jaringan; datanya fiktif. Hasilnya cocok dengan tabel IP demo TASK-02 (label, cakupan, flag) dan menggantikan angka tebakan fixture tulis tangan (mis. skor 1.1.1.1 yang sebenarnya `85.5`, bukan `77`). Skrip pembuatnya `src/testing/gen_backend_samples.py` (terbukti menghasilkan keluaran identik). Pembuatan ulang (fish):
+14. **Uji kontrak dengan sampel dari skema backend sungguhan.** `src/testing/backend-mock-samples.json` dan `backend-rejected-samples.json` dihasilkan dari kode backend (adapter mock + `assess` + skema respons) di kontainer `api`; datanya fiktif. **Ini bukan uji end-to-end:** gateway cache/kuota, router, dan database dilewati, sehingga `expires_at` bernilai null dan `from_cache` false di sampel, sedangkan respons `POST /checks` nyata mengisinya dari gateway. Cakupan cache/kedaluwarsa hanya diuji dengan fixture tulis tangan. Hasilnya cocok dengan tabel IP demo TASK-02 (label, cakupan, flag) dan menggantikan angka tebakan fixture tulis tangan (mis. skor 1.1.1.1 yang sebenarnya `85.5`, bukan `77`). Skrip pembuatnya `src/testing/gen_backend_samples.py` (terbukti menghasilkan keluaran identik). Pembuatan ulang (fish):
     ```fish
     docker compose exec -T api python - mock < frontend/src/testing/gen_backend_samples.py > frontend/src/testing/backend-mock-samples.json
     docker compose exec -T api python - rejected < frontend/src/testing/gen_backend_samples.py > frontend/src/testing/backend-rejected-samples.json
     ```
-15. **Pelajaran dari Tahap 1 diterapkan:** baseline dijalankan sebelum uji mutasi, dan uji mutasi massal (14 perusakan: skor null jadi nol, label null jadi RENDAH, penjaga cache, `+00:00` berlabel WIB, simulasi dimatikan, penjaga IPv4 pivot, penyebut 0, XSS lewat HTML mentah, Cek ulang untuk viewer, teks larangan MISP, "Muat lagi" tanpa batas, dedup riwayat, klik ganda submit, respons detail basi) semuanya **tertangkap**. Satu percobaan awal gagal dijalankan karena pola pencarian saya salah, bukan karena test lemah, lalu diulang dengan pola benar dan tertangkap.
+15. **Pelajaran dari Tahap 1 diterapkan:** baseline dijalankan sebelum uji mutasi, dan uji mutasi massal (14 perusakan: skor null jadi nol, label null jadi RENDAH, penjaga cache, `+00:00` berlabel WIB, simulasi dimatikan, penjaga IPv4 pivot, penyebut 0, XSS lewat HTML mentah, Cek ulang untuk viewer, teks larangan MISP, "Muat lagi" tanpa batas, dedup riwayat, klik ganda submit, respons detail basi) semuanya **tertangkap**. Satu percobaan awal gagal dijalankan karena pola pencarian saya salah, bukan karena test lemah, lalu diulang dengan pola benar dan tertangkap. Enam mutasi tambahan untuk keputusan 16-19 (aria-controls di semua tab, tooltip untuk `+00:00`, label waktu dikarang, kolom pencarian `disabled`, offset 56px kembali, viewer mendapat pencarian) juga semuanya tertangkap.
+
+16. **Tinggi top bar diukur, bukan angka keras.** Setelah kolom pencarian masuk top bar, header satu baris sekitar 82px (perkiraan dari kelas Tailwind), sedangkan rel kiri/kanan menempel di 56px; sekitar 26px bagian atas rel akan tertutup saat halaman digulir (lebih bila header membungkus atau ada pesan galat). Diperbaiki: pembungkus sticky di `Shell` + `ResizeObserver` (`useTopBarHeight`) menulis `--topbar-h`, dipakai rel lewat `lg:top-[var(--topbar-h,5rem)]` dan `lg:max-h-[calc(100vh-var(--topbar-h,5rem))]`. Hanya aturan CSS hasil build yang saya verifikasi (`top:var(--topbar-h,5rem)`); perilaku guliran nyata menunggu uji developer (langkah 12).
+17. **Tooltip ISO (Keputusan 20)**: komponen `TimeText` membungkus waktu yang benar-benar dikonversi dalam `<time dateTime title=ISO>`; string `+00:00` atau asing tampil mentah tanpa `<time>` dan tanpa label WIB.
+18. **Label waktu sumber menurut `source_time_type` (Aturan tampilan 3)**: "Laporan terakhir" / "Analisis terakhir"; jenis null berlabel netral "Waktu dari sumber", tidak dikarang. Sebelumnya label dikeraskan di tab dan `sourceTimeLabel` yang sudah teruji tidak terpakai.
+19. **ARIA tab**: `aria-controls` hanya pada tab terpilih (hanya panel aktif yang dirender); sebelumnya tiga tab menunjuk id yang tidak ada. Kolom pencarian memakai `readOnly` (bukan `disabled`) saat memeriksa agar fokus keyboard tidak jatuh ke `<body>`. Tombol Cek ulang tetap `disabled` saat memeriksa (fokus pada tombol itu hilang; dicatat sebagai gap).
 
 ### Bukti uji otomatis
 
-- 253 test Vitest di 15 file. Termasuk: pemformat (skor, label, waktu `+07:00`/`+00:00`, status/reason/flag, bukti, rasio vendor, salin hasil, pivot), riwayat (merge/prepend/filter), penjaga bentuk, store (submit, INPUT_DITOLAK, klik ganda, detail basi, submit vs detail, aborted, 401, `loadMore`), render komponen untuk tujuh IP demo dan check lama TASK-01, RBAC tampilan (viewer tanpa pencarian dan Cek ulang), kasus XSS, dan uji kontrak dengan keluaran asli backend.
+- 263 test Vitest di 15 file. Termasuk: pemformat (skor, label, waktu `+07:00`/`+00:00`, status/reason/flag, bukti, rasio vendor, salin hasil, pivot), riwayat (merge/prepend/filter), penjaga bentuk, store (submit, INPUT_DITOLAK, klik ganda, detail basi, submit vs detail, aborted, 401, `loadMore`), render komponen untuk tujuh IP demo dan check lama TASK-01, RBAC tampilan (viewer tanpa pencarian dan Cek ulang), kasus XSS, dan uji kontrak dengan keluaran asli backend.
 - Smoke dev server (`npm run dev`, localhost): 16 modul baru ter-compile (HTTP 200), log bebas error, proxy dan 401 tanpa token terbaca; dihentikan setelahnya.
 
 ### "Cek selesai" Tahap 2 — langkah developer (belum dijalankan)
@@ -338,10 +343,11 @@ Agen tidak punya password akun seed dan tidak ada peramban, jadi bagian ini belu
 9. **Tautan pivot:** klik "AbuseIPDB" dan "VirusTotal" di rel kanan; laporkan bila ada yang 404 (format URL belum terverifikasi resmi).
 10. **Keyboard:** Tab ke daftar tab bukti, panah kiri/kanan dan Home/End berpindah tab; fokus terlihat.
 11. **Screenshot** 1280×720, 1024×768, dan < 1024px dari workbench berisi satu hasil, untuk kritik desain (Keputusan 13h).
+12. **Gulir**: pada 1280×720 dengan riwayat panjang dan hasil berisi tab terbuka, gulir halaman ke bawah. Judul "Riwayat" dan "Keputusan" harus tetap terlihat di bawah top bar (tidak tertutup), juga saat muncul pesan galat di kolom pencarian atau top bar membungkus ke dua baris (lebar sempit).
 
 ## Known gaps baru (Tahap 2)
 
-1. **Uji manual Tahap 2 (langkah 1-11) belum dilakukan.**
+1. **Uji manual Tahap 2 (langkah 1-12) belum dilakukan.**
 2. **Tautan pivot belum diverifikasi dari dokumentasi resmi** (keputusan 4).
 3. **Tidak ada uji peramban otomatis** (Playwright dilarang, Keputusan 13h): handler klik/submit, fokus, dan penyalinan nyata hanya tercakup lewat store, render markup, dan uji kontrak.
 4. **"Muat lagi" dan penyaring bekerja pada yang sudah dimuat**; tidak ada pencarian penuh karena backend tanpa parameter filter (gap 2 rencana).
@@ -350,3 +356,6 @@ Agen tidak punya password akun seed dan tidak ada peramban, jadi bagian ini belu
 7. **Bar 0-100 `abuseConfidenceScore` tidak dibuat** (keputusan 3).
 8. **Panel samping tidak setinggi area utama di desktop** (polish Tahap 4; sama dengan gap 7 Tahap 1).
 9. **Berkas kontrak backend adalah potret**: bila adapter mock atau skema berubah, buat ulang dengan skrip (keputusan 14); uji kontrak yang akan gagal lebih dulu.
+10. **Perilaku guliran rel terhadap top bar belum diuji di peramban** (keputusan 16); hanya aturan CSS hasil build yang diperiksa.
+11. **Tombol "Cek ulang" nonaktif saat memeriksa**, sehingga fokus keyboard pada tombol itu hilang setelah pengecekan selesai (kolom pencarian sudah ditangani dengan `readOnly`).
+12. **Sampel kontrak tidak mencakup gateway cache/kuota** (keputusan 14): bentuk `from_cache: true` dan `expires_at` berisi hanya diuji lewat fixture tulis tangan.
