@@ -9,11 +9,11 @@ Diperbarui: 2026-11-03 (Tahap 2). Rujukan: [`TASK-03-frontend-workbench.md`](TAS
 | Rencana | Rencana TASK-03, keputusan grilling (Keputusan 13-28), `PRODUCT.md` | #30 | Selesai, ter-merge |
 | 0 | Scaffold `frontend/`, Tailwind, proxy, gerbang kualitas | #31 | Selesai, ter-merge; uji LAN proxy, `:8000`, dan `/@fs` (12 dari 12 varian 403) lolos |
 | 1 | Rencana desain, API client, login, shell layout | #32 | Selesai, ter-merge. Uji manual developer lolos (3 Nov) |
-| 2 | Cek IP, bukti, riwayat | | Selesai di branch lokal; **menunggu uji manual developer** (7 IP demo, 4 input ditolak, viewer, salin via `dev:lan`) dan "push" |
+| 2 | Cek IP, bukti, riwayat | | Selesai di branch lokal. Langkah 1-4 lulus (developer); langkah 5-8 dan 10-12 diuji agen di Brave headless + backend sungguhan (lulus); **tersisa langkah 9 (klik tautan pivot) oleh developer** dan "push" |
 | 3 | Kirim ke MISP, tampilan Kiriman MISP | | Belum |
 | 4 | Bukti demo, uji akses negatif, polish, README | | Belum |
 
-Hasil terakhir (Tahap 2): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**263 passed**, 15 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_` di `frontend/src` kosong.
+Hasil terakhir (Tahap 2): backend `pytest` **763 passed**, `ruff check` dan `ruff format --check` bersih, `db` dan `api` `healthy`. Frontend `npm run lint` (tanpa warning), `npm run build`, `npm test` (**267 passed**, 15 file), `npm audit --omit=dev` dan `npm audit` keduanya **0 vulnerabilities**; grep `localStorage|sessionStorage|document.cookie|console.|dangerouslySetInnerHTML|VITE_` di `frontend/src` kosong.
 
 ## Tahap 0
 
@@ -318,17 +318,39 @@ Dikerjakan di branch `feat/task-03-tahap-2-workbench-cek-bukti-riwayat`. Tidak a
     ```
 15. **Pelajaran dari Tahap 1 diterapkan:** baseline dijalankan sebelum uji mutasi, dan uji mutasi massal (14 perusakan: skor null jadi nol, label null jadi RENDAH, penjaga cache, `+00:00` berlabel WIB, simulasi dimatikan, penjaga IPv4 pivot, penyebut 0, XSS lewat HTML mentah, Cek ulang untuk viewer, teks larangan MISP, "Muat lagi" tanpa batas, dedup riwayat, klik ganda submit, respons detail basi) semuanya **tertangkap**. Satu percobaan awal gagal dijalankan karena pola pencarian saya salah, bukan karena test lemah, lalu diulang dengan pola benar dan tertangkap. Enam mutasi tambahan untuk keputusan 16-19 (aria-controls di semua tab, tooltip untuk `+00:00`, label waktu dikarang, kolom pencarian `disabled`, offset 56px kembali, viewer mendapat pencarian) juga semuanya tertangkap.
 
-16. **Tinggi top bar diukur, bukan angka keras.** Setelah kolom pencarian masuk top bar, header satu baris sekitar 82px (perkiraan dari kelas Tailwind), sedangkan rel kiri/kanan menempel di 56px; sekitar 26px bagian atas rel akan tertutup saat halaman digulir (lebih bila header membungkus atau ada pesan galat). Diperbaiki: pembungkus sticky di `Shell` + `ResizeObserver` (`useTopBarHeight`) menulis `--topbar-h`, dipakai rel lewat `lg:top-[var(--topbar-h,5rem)]` dan `lg:max-h-[calc(100vh-var(--topbar-h,5rem))]`. Hanya aturan CSS hasil build yang saya verifikasi (`top:var(--topbar-h,5rem)`); perilaku guliran nyata menunggu uji developer (langkah 12).
+16. **Tinggi top bar diukur, bukan angka keras.** Setelah kolom pencarian masuk top bar, header satu baris sekitar 82px (perkiraan dari kelas Tailwind), sedangkan rel kiri/kanan menempel di 56px; sekitar 26px bagian atas rel akan tertutup saat halaman digulir (lebih bila header membungkus atau ada pesan galat). Diperbaiki: pembungkus sticky di `Shell` + `ResizeObserver` (`useTopBarHeight`) menulis `--topbar-h`, dipakai rel lewat `lg:top-[var(--topbar-h,5rem)]` dan `lg:max-h-[calc(100vh-var(--topbar-h,5rem))]`. Uji gulir di Chromium sungguhan (lihat "Hasil pengujian Tahap 2") menemukan kekurangan kedua: rel yang tingginya `100vh` dikurangi top bar saja terdorong footer di dasar halaman, sehingga judulnya menyelip di bawah top bar. Diperbaiki dengan mengukur tinggi footer juga (`--footer-h`, hook `useCssVarHeight`) dan mengurangkannya dari `max-h` rel.
 17. **Tooltip ISO (Keputusan 20)**: komponen `TimeText` membungkus waktu yang benar-benar dikonversi dalam `<time dateTime title=ISO>`; string `+00:00` atau asing tampil mentah tanpa `<time>` dan tanpa label WIB.
 18. **Label waktu sumber menurut `source_time_type` (Aturan tampilan 3)**: "Laporan terakhir" / "Analisis terakhir"; jenis null berlabel netral "Waktu dari sumber", tidak dikarang. Sebelumnya label dikeraskan di tab dan `sourceTimeLabel` yang sudah teruji tidak terpakai.
 19. **ARIA tab**: `aria-controls` hanya pada tab terpilih (hanya panel aktif yang dirender); sebelumnya tiga tab menunjuk id yang tidak ada. Kolom pencarian memakai `readOnly` (bukan `disabled`) saat memeriksa agar fokus keyboard tidak jatuh ke `<body>`. Tombol Cek ulang tetap `disabled` saat memeriksa (fokus pada tombol itu hilang; dicatat sebagai gap).
+20. **Bug paginasi nyata, ditemukan hanya dengan backend sungguhan.** Bila orang lain membuat pengecekan di tengah paginasi, offset bergeser: halaman berikutnya memuat ulang satu baris yang sama (dibuang dedup), dan baris terbaru itu sendiri tidak pernah termuat. Akibatnya riwayat berhenti 1 baris di bawah total (42 dari 43), "Muat lagi" tidak pernah hilang, dan klik berikutnya tidak berefek. Test unit sebelumnya hanya menguji dedup, bukan keadaan macet ini. Diperbaiki di `workbench/store.ts`: bila halaman berikutnya tumpang-tindih, halaman terdepan diambil ulang untuk memunculkan baris baru di atas (`refreshHead`, galatnya diabaikan diam-diam); bila tetap tidak ada kemajuan, tombol ditutup. Dijaga 4 test dengan server palsu yang bisa bertambah di tengah paginasi.
+21. **Baris riwayat tanpa badge SIMULASI itu benar**, bukan cacat: database dev berisi 3 baris bukan-mock, yaitu check live nyata `id=3` (118.25.6.39, 31 Okt, VirusTotal dari cache) dan dua check lama TASK-01 (`id=1`, `id=2`, `SKIPPED/ADAPTER_NOT_IMPLEMENTED`). Ketiganya tampil benar di UI nyata: tanpa bingkai simulasi, `RENDAH` abu-slate, label waktu "Analisis terakhir 30 Okt 2026 15:01:36 WIB", "Cache, berlaku sampai…" untuk sumber ber-cache, "Ambil baru" untuk yang lain, dan check lama tanpa label cache palsu serta field kosong "tidak tersedia".
+22. **Cara pengujian peramban (pengecualian sekali pakai atas Keputusan 13h, disetujui developer 3 Nov).** Brave 156 headless (Chromium) yang sudah terpasang dikendalikan skrip sementara di `/tmp` lewat Chrome DevTools Protocol memakai WebSocket bawaan Node, tanpa dependency baru dan tanpa menyentuh repo. Login memakai akun analyst sementara `agen_uji` (password acak di file berizin 600, tidak pernah dicetak). Skrip dan profil dibuang setelah selesai; hanya screenshot yang disisakan di luar repo (`/tmp/uji/shots`). Backend dipastikan `SOURCES_MODE=mock` dan `MISP_MODE=mock` sebelum membuat pengecekan, sehingga tidak ada kuota yang terpakai.
 
 ### Bukti uji otomatis
 
-- 263 test Vitest di 15 file. Termasuk: pemformat (skor, label, waktu `+07:00`/`+00:00`, status/reason/flag, bukti, rasio vendor, salin hasil, pivot), riwayat (merge/prepend/filter), penjaga bentuk, store (submit, INPUT_DITOLAK, klik ganda, detail basi, submit vs detail, aborted, 401, `loadMore`), render komponen untuk tujuh IP demo dan check lama TASK-01, RBAC tampilan (viewer tanpa pencarian dan Cek ulang), kasus XSS, dan uji kontrak dengan keluaran asli backend.
+- 267 test Vitest di 15 file. Termasuk: pemformat (skor, label, waktu `+07:00`/`+00:00`, status/reason/flag, bukti, rasio vendor, salin hasil, pivot), riwayat (merge/prepend/filter), penjaga bentuk, store (submit, INPUT_DITOLAK, klik ganda, detail basi, submit vs detail, aborted, 401, `loadMore`), render komponen untuk tujuh IP demo dan check lama TASK-01, RBAC tampilan (viewer tanpa pencarian dan Cek ulang), kasus XSS, dan uji kontrak dengan keluaran asli backend.
 - Smoke dev server (`npm run dev`, localhost): 16 modul baru ter-compile (HTTP 200), log bebas error, proxy dan 401 tanpa token terbaca; dihentikan setelahnya.
 
-### "Cek selesai" Tahap 2 — langkah developer (belum dijalankan)
+### Hasil pengujian Tahap 2 (3 Nov 2026)
+
+Langkah 1-4: dijalankan developer (lulus). Langkah 5-8 dan 10-12: dijalankan agen di Brave headless terhadap backend sungguhan (mock), 51 pemeriksaan otomatis terakhir **lulus semua** setelah perbaikan keputusan 16 dan 20. Langkah 5-7 juga diuji lewat API (9 dari 9 lulus).
+
+| Langkah | Hasil terukur |
+|---|---|
+| 2. tujuh IP demo | Skor, label, cakupan, status, badge SIMULASI, dan blok putus-putus untuk N/A cocok dengan tabel TASK-02; `149.112.112.112` bergaris `rgb(42, 54, 68)` hue 212° (bukan hijau); HASIL_BERBEDA tampil di Ringkasan; WHITELISTED dan NO_VENDOR_OPINION tampil di rel keputusan. Badge SIMULASI di riwayat cocok dengan flag dari API (59 dari 62; sisanya 3 baris bukan-mock, keputusan 21). |
+| 3. input ditolak | `10.10.50.10` PRIVATE, `127.0.0.1` LOOPBACK, `2001:db8::1` IPV6_NOT_SUPPORTED, `abc` INVALID_FORMAT: pesan backend + kode tampil; panel tengah dan riwayat tidak berubah; isian dipertahankan. |
+| 5. Cek ulang | Tepat 1 POST baru; dua baris IP yang sama di paling atas (API: id berbeda, total +2). |
+| 6. klik riwayat | 0 POST baru, jumlah baris tetap, tepat satu baris `aria-current`; API: GET detail tidak mengubah total, id tidak ada -> 404. |
+| 7. Muat lagi | 20 baris awal dari total 43-54; setelah semua termuat jumlah baris = total (tanpa baris ganda) dan tombol hilang, termasuk saat orang lain menambah pengecekan di tengah (keputusan 20). |
+| 8. salin hasil | `localhost` aman: "Tersalin", isi clipboard sungguhan memuat IP, skor, dan kalimat bukan probabilitas, tanpa `%`. Konteks tidak aman disimulasikan dengan mengganti `isSecureContext` menjadi false (bukan lewat `dev:lan` nyata): `<textarea>` readonly terfokus, seluruh teks terpilih, petunjuk menyebut Ctrl+C. |
+| 9. tautan pivot | Atribut benar: `target="_blank"`, `rel="noopener noreferrer"`, href `https://www.abuseipdb.com/check/<ip>` dan `https://www.virustotal.com/gui/ip-address/<ip>`. **Kebenaran URL tetap tidak terverifikasi**: AbuseIPDB mengenali peramban otomatis dan menampilkan "Please Don't Scrape AbuseIPDB" (juga 403 Cloudflare lewat `curl`), VirusTotal 200 untuk path apa pun (situs satu halaman) dan gagal dimuat di headless. |
+| 10. keyboard tab | ArrowRight/Left berputar, End/Home ke ujung, fokus selalu pada tab terpilih, tepat satu tab ber-`tabindex=0`, outline fokus `2px solid` Aksen, Tab dari tab berpindah ke panel. |
+| 11. layar | Screenshot 1280×720, 1024×768, 800×390 (dan login, tujuh IP, tab, data live, data lama, salin cadangan) di `/tmp/uji/shots` (di luar repo). Pada 800×390 urutan tumpukan terukur bukti > keputusan > riwayat. |
+| 12. gulir | Pada 1280×720 dan 1024×768, di posisi atas/tengah/dasar, rel kiri dan kanan selalu berada di antara bawah top bar dan awal footer; `--topbar-h` dan `--footer-h` sama dengan tinggi nyata; saat pesan galat membuat top bar naik (83→114px dan 133→143px), variabel mengikuti dan rel tidak tertutup. |
+
+Data uji dibersihkan: 76 baris `ip_checks` milik `agen_uji` dan 48 baris `source_cache` untuk IP `20.20.20.*` dihapus (sisa tepat 17 baris developer: admin 15, analyst 2); tidak ada submission MISP yang terkait; akun `agen_uji` dinonaktifkan (login 401). 112 baris `audit_logs` oleh `agen_uji` **tetap ada** (catatan permanen). Cache mock untuk IP demo bersama (mis. 1.1.1.1) tidak dihapus karena tidak bisa dipisahkan dari milik developer; isinya data mock yang sama.
+
+### "Cek selesai" Tahap 2 — daftar langkah (1-8 dan 10-12 sudah lulus; tersisa 9)
 
 Agen tidak punya password akun seed dan tidak ada peramban, jadi bagian ini belum diuji di peramban:
 
@@ -347,7 +369,7 @@ Agen tidak punya password akun seed dan tidak ada peramban, jadi bagian ini belu
 
 ## Known gaps baru (Tahap 2)
 
-1. **Uji manual Tahap 2 (langkah 1-12) belum dilakukan.**
+1. **Langkah 9 (klik tautan pivot di peramban biasa) belum dilakukan.** Selebihnya lulus.
 2. **Tautan pivot belum diverifikasi dari dokumentasi resmi** (keputusan 4).
 3. **Tidak ada uji peramban otomatis** (Playwright dilarang, Keputusan 13h): handler klik/submit, fokus, dan penyalinan nyata hanya tercakup lewat store, render markup, dan uji kontrak.
 4. **"Muat lagi" dan penyaring bekerja pada yang sudah dimuat**; tidak ada pencarian penuh karena backend tanpa parameter filter (gap 2 rencana).
@@ -356,6 +378,11 @@ Agen tidak punya password akun seed dan tidak ada peramban, jadi bagian ini belu
 7. **Bar 0-100 `abuseConfidenceScore` tidak dibuat** (keputusan 3).
 8. **Panel samping tidak setinggi area utama di desktop** (polish Tahap 4; sama dengan gap 7 Tahap 1).
 9. **Berkas kontrak backend adalah potret**: bila adapter mock atau skema berubah, buat ulang dengan skrip (keputusan 14); uji kontrak yang akan gagal lebih dulu.
-10. **Perilaku guliran rel terhadap top bar belum diuji di peramban** (keputusan 16); hanya aturan CSS hasil build yang diperiksa.
+10. ~~Perilaku guliran rel belum diuji di peramban~~ **sudah diuji di Chromium** (langkah 12); tinggal diuji di Firefox dan layar sungguhan.
 11. **Tombol "Cek ulang" nonaktif saat memeriksa**, sehingga fokus keyboard pada tombol itu hilang setelah pengecekan selesai (kolom pencarian sudah ditangani dengan `readOnly`).
 12. **Sampel kontrak tidak mencakup gateway cache/kuota** (keputusan 14): bentuk `from_cache: true` dan `expires_at` berisi hanya diuji lewat fixture tulis tangan.
+13. **Top bar membungkus di layar sempit.** Pada 1024px menjadi dua baris (133px, sekitar 17% tinggi layar) dan pada 800×390 memakan sekitar 34% tinggi layar dan tetap `sticky`. Usul Tahap 4: `sticky` hanya di ≥ 1024px dan/atau meringkas badge.
+14. **Chip label patah di tengah kata** di rel riwayat pada 1024px ("PERLU_PEMERIKSAA / N") karena lebar rel 232px; tag SIMULASI juga membungkus dua baris. Usul Tahap 4: titik patah setelah garis bawah (`<wbr>`) atau chip lebih kecil di rel.
+15. **Tata letak bergeser saat pesan galat pencarian muncul/hilang** (top bar 83→114px pada 1280, 133→143px pada 1024). Usul Tahap 4: sediakan ruang tetap untuk pesan atau tampilkan sebagai lapisan di bawah kolom.
+16. **Uji peramban hanya di Chromium (Brave 156 headless)**: Firefox dan Safari belum; font sistem headless belum tentu sama dengan perangkat tim; konteks tidak aman pada langkah 8 disimulasikan, bukan lewat `dev:lan` sungguhan.
+17. **112 baris `audit_logs` oleh `agen_uji` dan akun nonaktif `agen_uji` tetap ada** di database dev (audit bersifat permanen; akun tidak dihapus). Hapus akunnya bila tidak diinginkan.
