@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { UserOut } from '../api/types'
 import type { HealthState } from '../lib/health'
 import { Button } from './Button'
@@ -28,6 +29,8 @@ interface TopBarProps {
   view: View
   onNavigate: (view: View) => void
   onLogout: () => void
+  // Kolom pencarian; null untuk akun tanpa hak membuat pengecekan (viewer).
+  search?: ReactNode
 }
 
 export function TopBar({
@@ -37,10 +40,13 @@ export function TopBar({
   view,
   onNavigate,
   onLogout,
+  search = null,
 }: TopBarProps) {
   return (
     <header className="sticky top-0 z-10 flex min-h-14 flex-wrap items-center gap-x-6 gap-y-2 border-b border-garis/35 bg-panel px-4 py-2">
       <span className="text-sub font-semibold">SOC16 TI</span>
+
+      {search}
 
       <nav aria-label="Tampilan" className="flex gap-1">
         {NAV.map(({ view: target, label }) => {

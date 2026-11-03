@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/useAuth'
+import { canCheck } from '../lib/can'
+import { useWorkbench } from '../workbench/useWorkbench'
+import { DecisionRail } from './DecisionRail'
+import { EvidencePanel } from './EvidencePanel'
+import { HistoryRail } from './HistoryRail'
+import { SearchBar } from './SearchBar'
 import { TopBar, type View } from './TopBar'
 import { useHealth } from './useHealth'
 
 const PANEL = 'p-4'
-const PANEL_TITLE = 'text-sub font-semibold'
 const PLACEHOLDER = 'mt-2 text-padat text-redup'
 
 // Urutan DOM sengaja mengikuti urutan visual desktop (riwayat, bukti, keputusan) supaya urutan Tab
@@ -14,6 +19,7 @@ export function Shell() {
   const { user, sessionEnd, api, logout, refreshUser } = useAuth()
   const [view, setView] = useState<View>('workbench')
   const health = useHealth(api, view)
+  const [state, store] = useWorkbench(api)
 
   // Ganti tampilan = validasi ulang sesi. Token yang sudah tidak berlaku (kedaluwarsa, akun dinonaktifkan)
   // menghasilkan 401 dan otomatis mengembalikan ke login; tanpa ini shell kosong tidak pernah memanggil API.
@@ -22,6 +28,9 @@ export function Shell() {
   }, [view, refreshUser])
 
   if (user === null) return null
+
+  // Hanya tampilan: kontrol sebenarnya ada di backend (403).
+  const canRun = canCheck(user)
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -32,6 +41,20 @@ export function Shell() {
         view={view}
         onNavigate={setView}
         onLogout={logout}
+        search={
+          canRun ? (
+            <SearchBar
+              submitting={state.submitting}
+              error={state.submitError}
+              onSubmit={(ip) => {
+                // Hasil pengecekan tampil di tampilan Workbench.
+                setView('workbench')
+                return store.submit(ip)
+              }}
+              onEdit={store.clearSubmitError}
+            />
+          ) : null
+        }
       />
 
       <div className="grid flex-1 grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)_264px] xl:grid-cols-[272px_minmax(0,1fr)_304px]">
@@ -39,17 +62,26 @@ export function Shell() {
           aria-label="Riwayat"
           className={`${PANEL} order-3 border-t border-garis/35 bg-panel lg:order-none lg:sticky lg:top-14 lg:max-h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-r`}
         >
-          <h2 className={PANEL_TITLE}>Riwayat</h2>
-          <p className={PLACEHOLDER}>Belum ada riwayat yang dimuat.</p>
+          <HistoryRail
+            state={state}
+            onSelect={(id) => {
+              setView('workbench')
+              void store.select(id)
+            }}
+            onLoadMore={() => void store.loadMore()}
+            onRetry={() => void store.loadInitial()}
+          />
         </aside>
 
         <main className={`${PANEL} order-1 lg:order-none`}>
           {view === 'workbench' ? (
-            <>
-              <h1 className="sr-only">Workbench investigasi IP</h1>
-              <h2 className={PANEL_TITLE}>Bukti</h2>
-              <p className={PLACEHOLDER}>Belum ada pengecekan yang dipilih.</p>
-            </>
+            <EvidencePanel
+              selected={state.selected}
+              detailLoading={state.detailLoading}
+              detailError={state.detailError}
+              submitting={state.submitting}
+              canRun={canRun}
+            />
           ) : (
             <>
               <h1 className="text-judul font-semibold">Kiriman MISP</h1>
@@ -62,14 +94,27 @@ export function Shell() {
           aria-label="Keputusan dan aksi"
           className={`${PANEL} order-2 border-t border-garis/35 bg-panel lg:order-none lg:sticky lg:top-14 lg:max-h-[calc(100vh-3.5rem)] lg:self-start lg:overflow-y-auto lg:border-t-0 lg:border-l`}
         >
-          <h2 className={PANEL_TITLE}>Keputusan</h2>
-          <p className={PLACEHOLDER}>Aksi muncul setelah ada hasil pengecekan.</p>
+          <DecisionRail
+            check={state.selected}
+            canRun={canRun}
+            submitting={state.submitting}
+            onRerun={(ip) => {
+              setView('workbench')
+              void store.submit(ip)
+            }}
+          />
         </aside>
       </div>
 
       <footer className="border-t border-garis/35 bg-panel px-4 py-2 text-kecil text-redup">
-        Sumber: AbuseIPDB, VirusTotal · Skor = label indikasi untuk triase,
-        bukan peluang IP jahat.
+        Sumber: AbuseIPDB, VirusTotal
+        {state.selected !== null && (
+          <>
+            {' '}
+            · scoring_version <code className="font-mono">{state.selected.scoring_version}</code>
+          </>
+        )}{' '}
+        · Skor = label indikasi untuk triase, bukan peluang IP jahat.
       </footer>
     </div>
   )
