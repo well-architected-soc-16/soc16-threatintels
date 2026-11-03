@@ -59,7 +59,7 @@ Panduan RKS301 KM-5 mensyaratkan minimal satu sumber TI eksternal benar-benar di
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.x, Alembic, Pydantic v2 | Berjalan (lokal) |
 | Autentikasi | OAuth2 password flow + JWT (PyJWT), hash password argon2 (pwdlib) | Berjalan (lokal) |
 | Dokumentasi API | Swagger/OpenAPI di `/docs` | Tersedia |
-| Frontend | Vite + React + TypeScript + Tailwind CSS v4 | Kerangka saja (TASK-03 Tahap 0): dev server, proxy `/api`, Vitest; belum ada tampilan workbench |
+| Frontend | Vite + React + TypeScript + Tailwind CSS v4 | Login dan shell layout (TASK-03 Tahap 1); isi workbench (cek IP, bukti, riwayat, kirim MISP) belum ada |
 | Sumber reputasi | AbuseIPDB dan VirusTotal lewat adapter | Adapter, cache, kuota, dan mode mock ada; mode live teruji dengan API nyata 31 Okt 2026 |
 | Integrasi indikator | MISP | Mode mock; MISP asli belum |
 | Penyimpanan data | PostgreSQL 18 (psycopg 3) di kontainer | Berjalan (lokal) |
@@ -350,7 +350,7 @@ Setelah mengubah kode, jalankan `docker compose up -d --build` agar image `api` 
 
 ### Frontend (dev)
 
-Frontend ada di `frontend/` (Vite + React + TypeScript + Tailwind CSS v4) dan dijalankan dengan Node di laptop, bukan di kontainer. Rencana rinci: [`docs/tasks/TASK-03-frontend-workbench.md`](docs/tasks/TASK-03-frontend-workbench.md). Saat ini baru kerangka; tampilan workbench dikerjakan di tahap berikutnya.
+Frontend ada di `frontend/` (Vite + React + TypeScript + Tailwind CSS v4) dan dijalankan dengan Node di laptop, bukan di kontainer. Rencana rinci: [`docs/tasks/TASK-03-frontend-workbench.md`](docs/tasks/TASK-03-frontend-workbench.md). Saat ini baru halaman login dan shell (top bar, tiga panel kosong, footer); isi workbench dikerjakan di tahap berikutnya. Login memakai akun hasil `scripts.seed_users` (admin, analyst_misp, analyst, viewer). Token JWT hanya disimpan di memori, jadi menyegarkan halaman berarti login ulang, dan sesi berlaku 30 menit (jam berakhirnya tampil di top bar).
 
 Prasyarat: Node **22.12 atau lebih baru** (syarat Vite). Vitest 5 hanya mendukung Node `^22.12`, `^24`, dan `>=26`, jadi Node 23 dan 25 tidak didukung. Backend juga harus sudah berjalan (`docker compose up -d`).
 

@@ -25,6 +25,9 @@ logs/
 secrets/
 .ruff_cache/
 
+# Impeccable: state, config, dan cache lokal (dapat memuat path pribadi); jangan di-commit (TASK-03 Keputusan 13i)
+.impeccable/
+
 # Claude Code: catatan & setting pribadi
 CLAUDE.local.md
 .claude/settings.local.json
