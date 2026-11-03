@@ -20,6 +20,14 @@
   --color-tinggi-bg: #33200c;
   --color-sangat: #ff8a80;
   --color-sangat-bg: #3d1517;
+
+  /* Isi solid blok skor di strip ringkasan: satu-satunya area berwarna solid (Keputusan 13e) */
+  --color-perlu-strip: #e8c21a;
+  --color-perlu-ink: #1a1500;
+  --color-tinggi-strip: #f08a24;
+  --color-tinggi-ink: #1a0f02;
+  --color-sangat-strip: #c4262e;
+  --color-sangat-ink: #ffffff;
   --color-na: #b4c0ce;
   --color-simulasi: #e9d5ff;
   --color-simulasi-bg: #2a1a40;
@@ -91,4 +99,32 @@
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+@layer components {
+  /* Bingkai tebal bergaris diagonal untuk hasil simulasi: warna khusus non-verdict (ungu) + pola + teks.
+     Isinya diberi latar sendiri oleh pemakai. */
+  .simulasi-frame {
+    padding: 4px;
+    border-radius: 0.5rem;
+    background: repeating-linear-gradient(
+      45deg,
+      var(--color-simulasi-garis) 0 6px,
+      var(--color-simulasi-bg) 6px 12px
+    );
+  }
+}
+
+/* Batang memuat tak-tentu: hanya selama pengecekan berjalan (gerakan = respons aksi user). */
+@keyframes indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.bar-indeterminate {
+  animation: indeterminate 1.2s ease-in-out infinite;
 }

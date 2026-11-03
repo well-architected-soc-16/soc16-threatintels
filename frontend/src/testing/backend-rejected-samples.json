@@ -1,0 +1,26 @@
+{
+  "10.10.50.10": {
+    "assessment_status": "INPUT_DITOLAK",
+    "risk_score": null,
+    "reason_code": "PRIVATE",
+    "message": "Alamat privat/internal tidak diperiksa"
+  },
+  "127.0.0.1": {
+    "assessment_status": "INPUT_DITOLAK",
+    "risk_score": null,
+    "reason_code": "LOOPBACK",
+    "message": "Alamat loopback tidak diperiksa"
+  },
+  "2001:db8::1": {
+    "assessment_status": "INPUT_DITOLAK",
+    "risk_score": null,
+    "reason_code": "IPV6_NOT_SUPPORTED",
+    "message": "IPv6 belum didukung"
+  },
+  "abc": {
+    "assessment_status": "INPUT_DITOLAK",
+    "risk_score": null,
+    "reason_code": "INVALID_FORMAT",
+    "message": "Format bukan alamat IPv4 yang valid"
+  }
+}

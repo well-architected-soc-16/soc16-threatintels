@@ -17,6 +17,12 @@ colors:
   tinggi-bg: "#33200c"
   sangat: "#ff8a80"
   sangat-bg: "#3d1517"
+  perlu-strip: "#e8c21a"
+  perlu-ink: "#1a1500"
+  tinggi-strip: "#f08a24"
+  tinggi-ink: "#1a0f02"
+  sangat-strip: "#c4262e"
+  sangat-ink: "#ffffff"
   na: "#b4c0ce"
   simulasi: "#e9d5ff"
   simulasi-bg: "#2a1a40"
@@ -106,11 +112,11 @@ components:
 
 **Creative North Star: "Meja Kerja Analis di Ruang Redup"**
 
-Antarmuka ini adalah meja kerja, bukan dasbor: satu IP per investigasi, dibaca beberapa menit oleh analis di lab atau di depan proyektor, dengan lampu diredupkan. Karena itu dunianya gelap slate (bukan hitam pekat), tenang, dan padat secukupnya. Layout, navigasi, dan kontrol sengaja standar; yang khas hanya palet, tipografi sistem, dan satu tempat berani (strip ringkasan skor, dibangun di Tahap 2).
+Antarmuka ini adalah meja kerja, bukan dasbor: satu IP per investigasi, dibaca beberapa menit oleh analis di lab atau di depan proyektor, dengan lampu diredupkan. Karena itu dunianya gelap slate (bukan hitam pekat), tenang, dan padat secukupnya. Layout, navigasi, dan kontrol sengaja standar; yang khas hanya palet, tipografi sistem, dan satu tempat berani (strip ringkasan skor).
 
 Prinsip yang menentukan hampir semua keputusan visual: ketidakpastian tidak boleh disamarkan. Data kosong, gagal, terbatas, dan simulasi harus terlihat berbeda dari kondisi normal, dan warna tidak pernah menjadi satu-satunya pembeda: setiap status membawa teks, dan bentuknya berbeda bila warnanya sama.
 
-Dokumen ini hanya mencatat apa yang sudah terbangun di Tahap 1 (halaman login dan shell). Bagian yang baru diputuskan tetapi belum dibangun ditandai "Tahap 2" dan bersumber dari "Keputusan desain" di `docs/tasks/TASK-03-progress.md`. Bila bertentangan dengan `docs/tasks/TASK-03-frontend-workbench.md`, dokumen TASK-03 yang menang.
+Dokumen ini hanya mencatat apa yang sudah terbangun: Tahap 1 (login dan shell) dan Tahap 2 (pencarian IP, riwayat, strip ringkasan, tab bukti, rel keputusan). Bagian yang belum dibangun (kirim ke MISP dan tampilan Kiriman MISP, Tahap 3) ditandai dan bersumber dari "Keputusan desain" di `docs/tasks/TASK-03-progress.md`. Bila bertentangan dengan `docs/tasks/TASK-03-frontend-workbench.md`, dokumen TASK-03 yang menang.
 
 **Key Characteristics:**
 - Gelap slate dengan dua lapis netral (Tanah untuk area kerja, Panel untuk rel dan top bar).
@@ -133,8 +139,8 @@ Dua netral slate, satu aksen biru, dan satu set warna semantik yang diwajibkan o
 - **Teks** (#e6ebf1): teks utama (14,16:1 pada Panel).
 - **Teks Redup** (#9fadbd): label sekunder, keterangan, jam sesi (7,43:1 pada Panel).
 
-### Semantik (didefinisikan di `src/index.css`; dipakai mulai Tahap 2)
-- **Label verdict** (hanya untuk label indikasi): `rendah` #d3dce6 pada #2a3644 (abu-slate, bukan hijau); `perlu` #f5d547 pada #2b2610 (kuning); `tinggi` #ffa347 pada #33200c (oranye); `sangat` #ff8a80 pada #3d1517 (merah). Semua ≥ 6,98:1.
+### Semantik (didefinisikan di `src/index.css`)
+- **Label verdict** (hanya untuk label indikasi): `rendah` #d3dce6 pada #2a3644 (abu-slate, bukan hijau); `perlu` #f5d547 pada #2b2610 (kuning); `tinggi` #ffa347 pada #33200c (oranye); `sangat` #ff8a80 pada #3d1517 (merah). Semua ≥ 6,98:1. Chip memakai pasangan ini. **Isi solid blok skor** di strip memakai pasangan lain: `perlu` #1a1500 pada #e8c21a (10,57:1), `tinggi` #1a0f02 pada #f08a24 (7,52:1), `sangat` #ffffff pada #c4262e (5,73:1); `rendah` tetap abu-slate #d3dce6 pada #2a3644 berbatas Garis.
 - **N/A** (#b4c0ce): untuk skor `null`; selalu dengan batas putus-putus, tanpa isi warna.
 - **Simulasi** (ungu, non-verdict): teks #e9d5ff pada #2a1a40, garis #c084fc. Jarak dari Biru Aksen ΔE76 ≈ 40; karena ungu dan biru mudah tertukar bagi penderita buta warna, bingkai tebal bergaris diagonal dan teks "SIMULASI · bukan data nyata" wajib menyertainya.
 - **Gagal** (#ff8a80): status kegagalan (`failed`, 501/502, sumber `ERROR`). Pengecualian tertulis atas aturan "warna verdict hanya untuk label": bentuknya chip berbingkai tanpa isi + ikon ✕ + teks "Gagal", berbeda dari `sangat` yang chip terisi.
@@ -154,7 +160,7 @@ Dua netral slate, satu aksen biru, dan satu set warna semantik yang diwajibkan o
 **Character:** Satu keluarga sans untuk semua (judul, label, tombol, data), tanpa display font. Terlihat sedikit berbeda antar perangkat; itu harga dari tanpa unduhan dan tanpa CDN (Keputusan 13a).
 
 ### Hierarchy
-- **Score** (700, 4rem, 1): angka skor / "N/A" di strip ringkasan, satu-satunya teks besar (Tahap 2).
+- **Score** (700, 4rem, 1): angka skor / "N/A" di strip ringkasan, satu-satunya teks besar.
 - **Headline** (600, 1.44rem, 1.25): judul halaman (login, Kiriman MISP).
 - **Brand/Title** (600, 1.2rem, 1.35): nama aplikasi di top bar dan judul panel.
 - **Body** (400, 1rem, 1.5): teks utama, isian, tombol.
@@ -171,7 +177,7 @@ Dua netral slate, satu aksen biru, dan satu set warna semantik yang diwajibkan o
 
 Tiga panel pada ≥ 1024px: rel kiri (riwayat), tengah (bukti, fluid), rel kanan (keputusan, sticky di bawah top bar 56px). Lebar rel 272/304px pada ≥ 1280px dan 232/264px pada 1024–1279px. Di bawah 1024px panel ditumpuk bukti → keputusan → riwayat lewat CSS `order`. Urutan DOM mengikuti urutan visual desktop agar urutan Tab sama dengan urutan baca; di layar sempit Tab lebih dulu melewati riwayat (diterima, layar sempit = sentuh). Satuan spasi 4px; padding panel 16px.
 
-Top bar `sticky`, membungkus ke baris kedua bila sempit. Halaman login: satu kartu 384px di tengah, bukan hero.
+Top bar `sticky` (pembungkusnya yang menempel), membungkus ke baris kedua bila sempit. Rel kiri/kanan menempel tepat di bawahnya dan berhenti di atas footer, memakai tinggi top bar dan footer yang **diukur** (`ResizeObserver` menulis `--topbar-h` dan `--footer-h`; cadangan 5rem dan 2.5rem), bukan angka keras, karena tinggi keduanya berubah oleh kolom pencarian, pesan galat, dan pembungkusan baris. Tanpa mengurangkan footer, rel yang terdorong footer di dasar halaman menyelip di bawah top bar. Halaman login: satu kartu 384px di tengah, bukan hero.
 
 ## Elevation & Depth
 
@@ -204,8 +210,23 @@ Sudut membulat sedang: 6px (`rounded-md`) untuk tombol, input, chip, dan kotak p
 ### Navigation
 - Tab bergaris bawah di top bar: aktif = teks Teks + garis bawah 2px Biru Aksen; tidak aktif = Teks Redup, hover Teks. `aria-current="page"` pada yang aktif. Transisi warna 150 ms.
 
-### Strip Ringkasan (Tahap 2, belum dibangun)
-Satu-satunya area berwarna solid dan bertipografi besar: blok skor (atau "N/A" berbatas putus-putus) berwarna verdict, label, dan pengukur cakupan dua sel (AbuseIPDB, VirusTotal; terisi bila menjawab, putus-putus bila tidak). Hasil simulasi dibingkai tebal ungu bergaris diagonal.
+### Strip Ringkasan
+Satu-satunya area berwarna solid dan bertipografi besar. Baris pertama: IP (mono, Headline), kode `assessment_status` (mono), dan tag simulasi bila ada. Lalu blok skor 4rem berwarna verdict (min-lebar 8rem, sudut 8px), di sampingnya label indikasi + penjelasan, "Cakupan x/2", dan pengukur cakupan: satu sel bernama per sumber. Sel yang menjawab terisi Teks (teks Tanah); sel yang tidak menjawab putus-putus, memuat kode status dan `reason`. Skor `null` menampilkan "N/A" berbatas putus-putus tanpa isi warna, disertai kalimat penyebabnya. Hasil simulasi seluruh strip dibingkai tebal 4px ungu bergaris diagonal (`.simulasi-frame`, 45°, 6px/6px).
+
+### Chips lanjutan
+- **Label indikasi:** chip terisi tinta lembut + teks berwarna verdict; null = N/A putus-putus.
+- **Tag simulasi:** bingkai bergaris diagonal membungkus kotak #2a1a40 berteks "SIMULASI · bukan data nyata" (Caption). Muncul di strip dan di setiap baris riwayat.
+- **Flag:** chip netral berbatas Garis berisi kode monospace; penjelasannya di bawah atau di samping sebagai teks biasa.
+- **Cache:** chip netral "Cache" / "Ambil baru", hanya bila sumber punya `retrieved_at`.
+
+### Tabs
+Pola WAI-ARIA: `role="tablist"`, tab aktif bergaris bawah 2px Biru Aksen, tab lain Teks Redup; roving `tabindex`, panah kiri/kanan dan Home/End berpindah dan mengaktifkan. Panel dapat difokus.
+
+### Riwayat
+Daftar tombol selebar rel: baris pertama IP (mono) dan skor/N/A (tabular), baris kedua chip label, baris ketiga waktu WIB (Caption), lalu tag simulasi. Baris terpilih berbatas Biru Aksen. Penyaring IP di atas daftar bertuliskan "Menyaring yang sudah dimuat"; "Muat lagi" hanya muncul bila yang dimuat kurang dari total.
+
+### Peringatan HASIL_BERBEDA
+Kotak berbatas Teks tanpa warna verdict (kuning dipakai label), berisi kalimat penjelasan flag.
 
 ## Do's and Don'ts
 

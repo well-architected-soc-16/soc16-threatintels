@@ -1,0 +1,453 @@
+[
+  {
+    "id": 1,
+    "ip": "1.1.1.1",
+    "assessment_status": "COMPLETE",
+    "risk_score": 85.5,
+    "scoring_version": "v1-percobaan",
+    "coverage": "2/2",
+    "flags": [
+      "SUMBER_SIMULASI"
+    ],
+    "sources": [
+      {
+        "source": "abuseipdb",
+        "status": "OK_SIGNAL",
+        "reason": null,
+        "normalized_score": 90,
+        "evidence_summary": {
+          "abuseConfidenceScore": 90,
+          "totalReports": 120,
+          "numDistinctUsers": 40,
+          "lastReportedAt": null,
+          "isWhitelisted": false,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_report",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      },
+      {
+        "source": "virustotal",
+        "status": "OK_SIGNAL",
+        "reason": null,
+        "normalized_score": 80,
+        "evidence_summary": {
+          "malicious": 10,
+          "suspicious": 0,
+          "harmless": 50,
+          "undetected": 30,
+          "timeout": 0,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_analysis",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      }
+    ],
+    "checked_by": "contoh",
+    "checked_at": "2026-11-03T10:00:00+07:00",
+    "indication": "SANGAT_TINGGI"
+  },
+  {
+    "id": 2,
+    "ip": "1.0.0.1",
+    "assessment_status": "COMPLETE",
+    "risk_score": 49.1,
+    "scoring_version": "v1-percobaan",
+    "coverage": "2/2",
+    "flags": [
+      "HASIL_BERBEDA",
+      "SUMBER_SIMULASI"
+    ],
+    "sources": [
+      {
+        "source": "abuseipdb",
+        "status": "OK_SIGNAL",
+        "reason": null,
+        "normalized_score": 90,
+        "evidence_summary": {
+          "abuseConfidenceScore": 90,
+          "totalReports": 120,
+          "numDistinctUsers": 40,
+          "lastReportedAt": null,
+          "isWhitelisted": false,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_report",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      },
+      {
+        "source": "virustotal",
+        "status": "OK_NO_SIGNAL",
+        "reason": null,
+        "normalized_score": 0,
+        "evidence_summary": {
+          "malicious": 0,
+          "suspicious": 0,
+          "harmless": 60,
+          "undetected": 30,
+          "timeout": 0,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_analysis",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      }
+    ],
+    "checked_by": "contoh",
+    "checked_at": "2026-11-03T10:00:00+07:00",
+    "indication": "PERLU_PEMERIKSAAN"
+  },
+  {
+    "id": 3,
+    "ip": "8.8.8.8",
+    "assessment_status": "DATA_TERBATAS",
+    "risk_score": null,
+    "scoring_version": "v1-percobaan",
+    "coverage": "1/2",
+    "flags": [
+      "SUMBER_SIMULASI"
+    ],
+    "sources": [
+      {
+        "source": "abuseipdb",
+        "status": "OK_SIGNAL",
+        "reason": null,
+        "normalized_score": 90,
+        "evidence_summary": {
+          "abuseConfidenceScore": 90,
+          "totalReports": 120,
+          "numDistinctUsers": 40,
+          "lastReportedAt": null,
+          "isWhitelisted": false,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_report",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      },
+      {
+        "source": "virustotal",
+        "status": "ERROR",
+        "reason": "TIMEOUT",
+        "normalized_score": null,
+        "evidence_summary": {
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": null,
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      }
+    ],
+    "checked_by": "contoh",
+    "checked_at": "2026-11-03T10:00:00+07:00",
+    "indication": null
+  },
+  {
+    "id": 4,
+    "ip": "8.8.4.4",
+    "assessment_status": "TIDAK_TERSEDIA",
+    "risk_score": null,
+    "scoring_version": "v1-percobaan",
+    "coverage": "0/2",
+    "flags": [
+      "SUMBER_SIMULASI"
+    ],
+    "sources": [
+      {
+        "source": "abuseipdb",
+        "status": "ERROR",
+        "reason": "TIMEOUT",
+        "normalized_score": null,
+        "evidence_summary": {
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": null,
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      },
+      {
+        "source": "virustotal",
+        "status": "NO_RECORD",
+        "reason": null,
+        "normalized_score": null,
+        "evidence_summary": {
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": null,
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      }
+    ],
+    "checked_by": "contoh",
+    "checked_at": "2026-11-03T10:00:00+07:00",
+    "indication": null
+  },
+  {
+    "id": 5,
+    "ip": "9.9.9.9",
+    "assessment_status": "COMPLETE",
+    "risk_score": 85.5,
+    "scoring_version": "v1-percobaan",
+    "coverage": "2/2",
+    "flags": [
+      "WHITELISTED",
+      "SUMBER_SIMULASI"
+    ],
+    "sources": [
+      {
+        "source": "abuseipdb",
+        "status": "OK_SIGNAL",
+        "reason": null,
+        "normalized_score": 90,
+        "evidence_summary": {
+          "abuseConfidenceScore": 90,
+          "totalReports": 120,
+          "numDistinctUsers": 40,
+          "lastReportedAt": null,
+          "isWhitelisted": true,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_report",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      },
+      {
+        "source": "virustotal",
+        "status": "OK_SIGNAL",
+        "reason": null,
+        "normalized_score": 80,
+        "evidence_summary": {
+          "malicious": 10,
+          "suspicious": 0,
+          "harmless": 50,
+          "undetected": 30,
+          "timeout": 0,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_analysis",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      }
+    ],
+    "checked_by": "contoh",
+    "checked_at": "2026-11-03T10:00:00+07:00",
+    "indication": "SANGAT_TINGGI"
+  },
+  {
+    "id": 6,
+    "ip": "149.112.112.112",
+    "assessment_status": "COMPLETE",
+    "risk_score": 0.0,
+    "scoring_version": "v1-percobaan",
+    "coverage": "2/2",
+    "flags": [
+      "NO_VENDOR_OPINION",
+      "SUMBER_SIMULASI"
+    ],
+    "sources": [
+      {
+        "source": "abuseipdb",
+        "status": "OK_NO_SIGNAL",
+        "reason": null,
+        "normalized_score": 0,
+        "evidence_summary": {
+          "abuseConfidenceScore": 0,
+          "totalReports": 0,
+          "numDistinctUsers": 0,
+          "lastReportedAt": null,
+          "isWhitelisted": false,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_report",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      },
+      {
+        "source": "virustotal",
+        "status": "OK_NO_SIGNAL",
+        "reason": null,
+        "normalized_score": 0,
+        "evidence_summary": {
+          "malicious": 0,
+          "suspicious": 0,
+          "harmless": 0,
+          "undetected": 90,
+          "timeout": 0,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_analysis",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "NO_VENDOR_OPINION",
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      }
+    ],
+    "checked_by": "contoh",
+    "checked_at": "2026-11-03T10:00:00+07:00",
+    "indication": "RENDAH"
+  },
+  {
+    "id": 7,
+    "ip": "208.67.222.222",
+    "assessment_status": "DATA_TERBATAS",
+    "risk_score": null,
+    "scoring_version": "v1-percobaan",
+    "coverage": "1/2",
+    "flags": [
+      "SUMBER_SIMULASI"
+    ],
+    "sources": [
+      {
+        "source": "abuseipdb",
+        "status": "OK_NO_SIGNAL",
+        "reason": null,
+        "normalized_score": 0,
+        "evidence_summary": {
+          "abuseConfidenceScore": 0,
+          "totalReports": 0,
+          "numDistinctUsers": 0,
+          "lastReportedAt": null,
+          "isWhitelisted": false,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_report",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      },
+      {
+        "source": "virustotal",
+        "status": "INSUFFICIENT_DATA",
+        "reason": null,
+        "normalized_score": null,
+        "evidence_summary": {
+          "malicious": 0,
+          "suspicious": 0,
+          "harmless": 0,
+          "undetected": 0,
+          "timeout": 90,
+          "simulasi": true
+        },
+        "source_time": null,
+        "source_time_type": "last_analysis",
+        "retrieved_at": "2026-11-03T10:00:00+07:00",
+        "expires_at": null,
+        "from_cache": false,
+        "http_status": null,
+        "duration_ms": null,
+        "flags": [
+          "SUMBER_SIMULASI"
+        ],
+        "retry_after_seconds": null
+      }
+    ],
+    "checked_by": "contoh",
+    "checked_at": "2026-11-03T10:00:00+07:00",
+    "indication": null
+  }
+]

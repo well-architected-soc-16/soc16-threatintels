@@ -17,3 +17,39 @@ export function IconX({ className = 'size-4' }: { className?: string }) {
     </svg>
   )
 }
+
+export function IconCheck({ className = 'size-4' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M3 8.5l3.2 3.2L13 4.8" />
+    </svg>
+  )
+}
+
+export function IconExternal({ className = 'size-4' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M7 3H3.5v9.5H13V9M9.5 3H13v3.5M13 3L7.5 8.5" />
+    </svg>
+  )
+}
